@@ -1,0 +1,337 @@
+# Parental Proxy
+
+Tento dokument popisuje **proxy účastníctvo rodičov** pri komunikácii v systéme. Rieši situáciu, kde maloleté dieťa nemá vlastný prístup do aplikácie, ale je súčasťou tímového, klubového alebo komunikačného života — a rodič vystupuje v jeho mene.
+
+## Doménový kontext
+
+V detskom a mládežníckom športe je rodič kľúčový aktér:
+
+- Je v tímovom chate U13, kde tréner ohlasuje termíny
+- Komunikuje s trénerom o zdravotnom stave dieťaťa
+- Vyplňuje súhlasy s ošetrením
+- Sleduje hodnotenia trénera o pokroku dieťaťa
+- Je v skupine *"Rodičia U13"* pre výjazdy a logistiku
+
+Súčasne je rodič **právny zástupca** dieťaťa do plnoletosti — nielen praktický komunikátor, ale aj GDPR data subject, ktorý vykonáva práva za dieťa.
+
+V systéme to znamená dve dôležité veci:
+
+1. Rodič v komunikácii vystupuje **ako zástupca konkrétneho dieťaťa**, nie sám za seba
+2. Rodič má **read access** k dátam dieťaťa (lekárske, výkonnostné, komunikačné) až do plnoletosti
+
+## ParentalAccess — vzťahová entita
+
+```typescript
+const ParentalAccessSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  minorPersonId: z.instanceof(ObjectId),
+  parentPersonId: z.instanceof(ObjectId),
+  validUntil: z.date(),       // automaticky minor.birthDate + 18 rokov
+  restricted: z.boolean().default(false),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+```
+
+### Kľúčové vlastnosti
+
+- **M:N vzťah** — dieťa môže mať viac rodičov (matka aj otec), rodič môže mať viac detí. Žiadny `UNIQUE(minorPersonId)`.
+- **`validUntil`** sa pri vytvorení vypočíta ako *minor.birthDate + 18 rokov*. V deň plnoletosti záznam stratí platnosť.
+- **`restricted: false`** je default. Pri súdnom obmedzení prístupu (rozvod s konfliktom) admin organizácie nastaví `true` na základe dokumentu.
+
+### Lifecycle
+
+```
+Dieťa narodí → ParentalAccess vytvorený                                            ▲
+                                                                                   │
+                Rodič môže pridávať do tímových chatov ako proxy                   │
+                Rodič vidí lekárske záznamy dieťaťa                                │
+                Rodič číta direct chaty dieťa ↔ odborníci                          │
+                                                                                   │  18 rokov
+Dieťa dovŕši plnoletosť → ParentalAccess vyprší (background job)                   │
+                                                                                   │
+                Proxy účastníctva v tímových chatoch idú do read-only na 30 dní    │
+                Po 30 dňoch sa proxy odpojí                                        │
+                Dieťa dostane pozvánky ako direct účastník                         ▼
+```
+
+## Proxy účastníctvo v Courier
+
+Hlavné použitie v komunikačnom systéme. `ConversationParticipant` má:
+
+```typescript
+{
+  conversationId: ObjectId,
+  personId: ObjectId,            // rodič
+  representedMinorId: ObjectId,  // dieťa
+  participantType: 'proxy_for_minor',
+  role: 'member',
+  // ...
+}
+```
+
+### UI prezentácia
+
+V chat zobrazí UI meno *"Peter Novák (rodič Adamka)"* — odvodené v render-čase z týchto dvoch ID. Žiadny extra stĺpec, len JOIN cez Person collection.
+
+Iné varianty (záležia od preferencie organizácie):
+- *"Rodič Adamka Nováka"* (anonymizovanejšie)
+- *"P. Novák (rodič Adamka)"* (skratené)
+
+Pre MVP fixná voľba: *"{Plné meno rodiča} (rodič {Krstné meno dieťaťa})"*. Neskôr parametrizovateľné.
+
+### Pravidlá pre vytvorenie proxy
+
+`CourierService.addParticipant` pri pokuse vytvoriť `participantType: 'proxy_for_minor'`:
+
+```typescript
+async addProxyParticipant(input: AddProxyInput): Promise<Participant> {
+  // 1. Existuje platný ParentalAccess?
+  const access = await this.parentalAccessRepo.findActive({
+    parentPersonId: input.personId,
+    minorPersonId: input.representedMinorId,
+  });
+  if (!access) throw new ForbiddenError('PROXY_REQUIRES_PARENTAL_ACCESS');
+
+  // 2. Je access restricted?
+  if (access.restricted) {
+    // môže pridávať len admin (manuálne potvrdené)
+    if (!await this.canBypassRestriction(input.addedBy)) {
+      throw new ForbiddenError('PARENTAL_ACCESS_RESTRICTED');
+    }
+  }
+
+  // 3. Konverzácia podporuje proxy?
+  const conv = await this.convRepo.findById(input.conversationId);
+  if (conv.kind === 'direct') {
+    throw new ValidationError('PROXY_NOT_ALLOWED_IN_DIRECT');
+  }
+
+  // 4. Vytvoriť participant
+  return this.participantRepo.create({
+    ...input,
+    participantType: 'proxy_for_minor',
+  });
+}
+```
+
+### Viacdetné rodiny
+
+Rodič s dvomi deťmi v rovnakom tíme má **dva** záznamy `ConversationParticipant` v tej istej konverzácii — jeden ako proxy pre Adamka, druhý pre Janka. Preto má primárny kľúč tvar `(conversationId, personId, representedMinorId)`.
+
+UI v takom prípade zobrazí *"Peter Novák (rodič Adamka, Janka)"* — agreguje sa v render-čase.
+
+### Obaja rodičia v skupine
+
+Bežné. `ParentalAccess` je M:N, takže obaja rodičia môžu mať platný záznam pre to isté dieťa, a obaja môžu byť pridaní ako proxy do tímového chatu. Klubový manažér v UI vidí, že *"Adamko má 2 zástupcov v chate"* a vie ich spravovať.
+
+## Vekový prah
+
+Kedy dieťa prestáva byť proxy-zastupované a vstupuje do komunikácie samostatne? Toto sa **parametrizuje per organizácia**:
+
+```typescript
+Organization.minorSelfJoinAge: number  // default 16
+```
+
+Niektoré kluby pustia 14-ročných do tímového chatu, iné majú prísne 18. Default 16 je vyvážený kompromis (puberta, schopnosť zodpovednej komunikácie, technické zručnosti).
+
+### Mechanika
+
+Pri pozývaní účastníka do skupinovej konverzácie (`group`) algoritmus:
+
+1. Vlastnícu organizáciu konverzácie zistíme z `Conversation.owningOrgId`
+2. `minorSelfJoinAge` z tejto organizácie
+3. Ak je pozývaný neplnoletý (vek < `minorSelfJoinAge`):
+   - hľadá sa `ParentalAccess`, pridá sa rodič ako proxy
+4. Ak je pozývaný neplnoletý (vek >= `minorSelfJoinAge`):
+   - dieťa je pridané ako direct účastník
+   - rodič **nie je** automaticky pridaný (ale môže byť pridaný separátne, ak má v klube vlastnú rolu — napr. tréner)
+
+## Lekárske záznamy
+
+Z dohody: **rodič vidí lekárske záznamy svojho dieťaťa kompletne**, žiadne redigovanie.
+
+ACL pre `medical_treatment` aktivitu:
+
+| Rola | R | W |
+|---|---|---|
+| Subjekt (dieťa) | – (až po veku) | – |
+| Rodič maloletého | ✓ (full) | ✓ (komentáre) |
+| Lekár — autor | ✓ | ✓ |
+| Klubový lekár | ✓ | ✓ |
+| Admin organizácie | ✓ (audit only) | – |
+
+Audit log loguje každý prístup. Pri otvorení lekárskeho záznamu rodičom sa vytvorí audit záznam *"Peter Novák (rodič Adamka) prečítal MedicalTreatment xyz"*.
+
+### Proč nie redigovať
+
+Pôvodne sme zvažovali redigovanú verziu (rodič vidí diagnózu, ale nie podrobné poznámky lekára). Z konverzácie sme to **zamietli** — rodič ako právny zástupca má právo vidieť všetko, čo lekár o dieťati zaznamená. Akékoľvek redigovanie by bolo v rozpore s GDPR a so zdravotníckym právom (rodič rozhoduje za dieťa o ďalších krokoch).
+
+## Direct chat dieťa ↔ odborník
+
+Po dovŕšení `minorSelfJoinAge` môže dieťa mať vlastné `direct` konverzácie s trénerom, lekárom alebo mentorom. V tomto kontexte:
+
+- **Rodič má read-only prístup** do týchto direct chatov, kým dieťa nedovŕši plnoletosť
+- Rodič **nemôže** písať
+- Rodič **nemá** prístup do direct chatov dieťaťa s rovesníkmi (kamarátmi, spoluhráčmi)
+- Dieťa v UI vidí indikátor *"Rodič číta tieto konverzácie"* — žiadne tajné čítanie
+
+E2E šifrovanie pre direct chat dieťaťa ↔ odborník (kde rodič musí mať read access) je zložité — server by potreboval kľúč pre rodičovský pohľad. Riešenie:
+
+- Klient dieťaťa pri vytvorení konverzácie vygeneruje kľúčový pár
+- **Triplikát** kľúča: dieťa, odborník, rodičia (jeden alebo viacerí)
+- Každý dešifruje na svojom klientovi
+
+Toto **nie je** plne E2E v kryptografickom zmysle (sú tam multiple recipients), ale je to "end-to-end" v tom zmysle, že server ciphertext nevie dešifrovať. Implementačne komplikovanejšie ako klasický 1:1 E2E — pre MVP **odporúčam server-side encryption pre direct chat dieťa-odborník** s ACL gate-om, plný E2E pre tieto case-y odložiť do budúcich verzií.
+
+## Plnoletosť a expirácia
+
+### V deň 18. narodenín dieťaťa
+
+Background job (denný cron):
+
+```javascript
+const expiringAccess = await db.parentalAccess.find({
+  validUntil: { $lt: now },
+  status: { $ne: 'expired' }
+});
+
+for (const access of expiringAccess) {
+  // 1. Označí ParentalAccess ako vypršaný
+  access.status = 'expired';
+  await access.save();
+
+  // 2. Notifikuje rodiča aj dieťa
+  await notify(access.parentPersonId, 'parental_access.expired', { minorId: access.minorPersonId });
+  await notify(access.minorPersonId, 'parental_access.expired_subject', { parentId: access.parentPersonId });
+
+  // 3. Proxy účastníctva idú do read-only stavu na 30 dní
+  await db.conversationParticipant.updateMany(
+    {
+      personId: access.parentPersonId,
+      representedMinorId: access.minorPersonId,
+      leftAt: null,
+    },
+    { $set: { role: 'observer', readOnlyUntil: addDays(now, 30) } }
+  );
+
+  // 4. Pripraví pozvánky pre dieťa do tímových chatov
+  await prepareDirectInvitationsForFormerMinor(access.minorPersonId);
+}
+```
+
+### Notifikácie
+
+Rodičovi:
+
+> *"Tvoj syn Adamko Novák dnes dovŕšil plnoletosť. Tvoje proxy účastníctvo v jeho chatoch zostáva ešte 30 dní v read-only stave, potom sa odpojí. Ak má pokračovať v chate, musí sa prihlásiť sám."*
+
+Dieťaťu (v tomto bode už dospelému):
+
+> *"Si plnoletý! Vlastnícke účty v rodičovskej zastupiteľnosti zaniknú. Aktivuj si vlastný prístup."*
+
+### Read-only grace period
+
+30 dní mäkkého prechodu — rodič ešte vidí konverzácie, ale nemôže písať. Cieľ: čas pre dieťa aktivovať svoj účet a pridať sa, plus archivačný komfort pre rodiča (export historických správ, ak chce).
+
+### Po 30 dňoch
+
+Proxy účastníctva sa fyzicky odoberú (`leftAt: now`). Konverzácie naďalej žijú (s dospelými účastníkmi alebo bez tohto subjektu).
+
+## Žiadny retroaktívny prístup
+
+Rozhodnutie z konverzácie: **dieťa po dosiahnutí plnoletosti NEMÁ retroaktívny prístup k tímovým chatom z detstva.**
+
+Dôvod:
+
+- v týchto chatoch sa o dieťati v jeho mene komunikovalo, ale dieťa samé nebolo účastníkom
+- otvorenie historického archívu by mohlo vyplaviť informácie o spoluhráčoch, ktoré nikdy neboli pre dieťa určené
+- je to ochrana ostatných účastníkov
+
+Klub však môže manuálne poskytnúť **export PDF** alebo JSON dump svojich časti chatu (správy *od neho* a správy *o ňom*), ak o to dieťa formálne požiada cez GDPR data export. Toto je rovnaký mechanizmus ako pre dospelých.
+
+## Reštriktívny rodičovský prístup
+
+`ParentalAccess.restricted: true` — ak súd zúžil prístup jedného z rodičov:
+
+- Rodič **nemôže** byť pridaný ako proxy do nových konverzácií dieťaťa
+- Rodič **stratí** read access k lekárskym záznamom dieťaťa
+- Existujúce proxy účastníctva sa **prevedú do read-only**
+
+Nastavenie `restricted = true` robí **len admin organizácie** na základe doručeného súdneho rozhodnutia. Manuálny proces s auditom — žiadna self-service.
+
+UI rodiča s `restricted: true` ukazuje:
+
+> *"Tvoj prístup k Adamkovým údajom bol obmedzený rozhodnutím súdu. Pre podrobnosti kontaktuj klub alebo právne oddelenie."*
+
+## Výnimky a hraničné prípady
+
+### Dvaja rodičia, jeden rozvedený, druhý plne aktívny
+
+`ParentalAccess` je M:N. Druhý rodič má `restricted: false` — má plný prístup, žiadne obmedzenie. Restriction je per-vzťah, nie per-rodič globálne.
+
+### Dospelý sa neprihlási po 18
+
+Po 30 dňoch grace period rodič stratí proxy prístup, dieťa nemá vlastný účet. Pre praktické účely je to *"opustený účet"*. Konverzácie pokračujú bez tohto subjektu, klub vidí *"Adamko Novák (neaktívny)"* v zozname členov tímu.
+
+Po 6 mesiacoch nečinnosti background job pošle SMS/email-pripomienku *"Tvoj účet zostal neaktivovaný"*. Po 12 mesiacoch sa účet archivuje.
+
+### Sirota / dieťa bez rodičov
+
+Pre takéto prípady systém vie zaznamenať **opatrovníka** — `ParentalAccess` má pole `relationship` (default *"parent"*, môže byť *"legal_guardian"*). Rovnaké práva, iný štítok v UI (*"opatrovník"* namiesto *"rodič"*).
+
+### Pestúnska starostlivosť
+
+Rovnaký mechanizmus ako legal guardian — `relationship: 'foster_parent'`. Klub potrebuje uvidieť dôkaz pri pridávaní (admin zaznamenáva manuálne).
+
+## Implementačné body
+
+### Stack
+
+```
+ParentalAccess žije v registry-mcp (registre)
+Konzumuje ho courier-mcp (pre proxy validation) a activity-mcp (pre lekárske ACL)
+Cross-MCP referencia cez ID — žiadny join, lookup v aplikácii
+```
+
+### Background jobs
+
+- **Denný expirácia job** (02:00 UTC) — nájde a prepne expirované `ParentalAccess`
+- **Denný proxy disconnect job** (03:00 UTC) — odpojí proxy účastníctva po 30-dňovom grace period
+- **Týždenný reconcile job** — kontroluje konzistenciu (proxy účastníctva bez platného ParentalAccess, atď.)
+
+### Audit log
+
+Každý prístup rodiča k:
+
+- lekárskemu záznamu dieťaťa
+- direct chatu dieťaťa
+- aktivitnému záznamu dieťaťa
+
+ide do `auditLog` collection. Toto je obrana pred zneužitím a podpora pre prípadné súdne procesy.
+
+### Notifikácie
+
+Pre kľúčové udalosti:
+
+| Udalosť | Komu |
+|---|---|
+| ParentalAccess vytvorený | rodič (potvrdenie) |
+| Proxy pridané do konverzácie | rodič |
+| Proxy odpojené z konverzácie | rodič |
+| ParentalAccess expirovaný | rodič + dieťa |
+| Read-only grace začal | rodič |
+| Read-only grace skončil | rodič |
+| Restriction nastavený | rodič (s odkazom na rozhodnutie) |
+
+## Otvorené otázky
+
+1. **Pri zmene legálneho zástupcu** (úmrtie rodiča, adopcia, atď.) — manuálny proces cez admin organizácie. Pre MVP stačí, do budúcnosti zvážiť self-service flow s overením.
+2. **Notifikačné preferencie rodiča** — chce notifikáciu o **každej** novej správe v tímovom chate dieťaťa (môže byť veľa)? Default zatiaľ áno (pre direct), nie pre group (DND default zapnuté).
+3. **Multilingual rodina** — rodič preferuje SK, dieťa EN. Notifikácie pre rodiča idú v SK. Štandardné, žiadne zmeny.
+4. **Rodičovský prístup k aktivitám iným než lekárskym** — momentálne má rodič full access k lekárskym, podmienečný k tréningovým a hodnotiacim. Treba uistiť, že ACL matrix to konzistentne reflektuje.
+
+## Nasleduje
+
+Pre ACL matice pokračuj v [../acl/matrix-comments](/acl/matrix-comments) a [../acl/matrix-courier](/acl/matrix-courier).
+Pre Courier subsystém pokračuj v [courier](courier).

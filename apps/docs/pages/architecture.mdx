@@ -1,0 +1,459 @@
+# Architektúra systému
+
+Tento dokument popisuje, ako je systém zložený. Začína vysokoúrovňovým pohľadom (čo komunikuje s čím), pokračuje doménovým modelom (subdomény, custom domény), technologickým stackom, a končí deployment topológiou.
+
+## Vysokoúrovňový pohľad
+
+Systém má štyri vrstvy. Nižšie vrstvy obsluhujú vyššie.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Klienti                                                      │
+│  ─ webová aplikácia    (activity.sportup.sk)                       │
+│  ─ admin aplikácia     (admin.activity.sportup.sk)                     │
+│  ─ marketing stránka   (sportup.sk)                           │
+│  ─ mobilná aplikácia   (natívna iOS/Android, neskôr)          │
+│  ─ AI agenti           (cez MCP)                              │
+│  ─ externé integrácie  (cez REST API)                         │
+└────────────┬─────────────────────────────────────────────────┘
+             │
+┌────────────▼─────────────────────────────────────────────────┐
+│  API Gateway + Identity                                       │
+│  ─ api.activity.sportup.sk    (Fastify-based API gateway)              │
+│  ─ auth.activity.sportup.sk   (OIDC provider)                          │
+└────────────┬─────────────────────────────────────────────────┘
+             │
+┌────────────▼─────────────────────────────────────────────────┐
+│  Doménové vrstvy (samostatné Node.js služby s MCP rozhraním)  │
+│  ─ registry-mcp.activity.sportup.sk    (registre, číselníky)            │
+│  ─ activity-mcp.activity.sportup.sk   (aktivity, mentoring, komentáre) │
+│  ─ courier-mcp.activity.sportup.sk    (chat, broadcasty)               │
+└────────────┬─────────────────────────────────────────────────┘
+             │
+┌────────────▼─────────────────────────────────────────────────┐
+│  Persistence a podporné služby                                │
+│  ─ MongoDB Atlas      (databáza, replica set, encryption)     │
+│  ─ Atlas Search       (full-text vyhľadávanie)                │
+│  ─ S3-kompatibilný    (prílohy, fotky, exporty)               │
+│  ─ Redis              (cache, pub/sub pre Courier real-time)  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Klienti nikdy nevolajú MCP servery priamo — vždy idú cez API Gateway, ktorý sa stará o autentifikáciu, rate limiting a audit log. Výnimka: AI agenti, ktorí podporujú MCP natívne, môžu volať MCP servery priamo s OAuth tokenom z `auth.activity.sportup.sk`.
+
+## Technologický stack
+
+Voľba stacku reflektuje dlhodobosť projektu (10+ rokov), tímové skúsenosti, aj špecifiká domény.
+
+### Backend
+
+| Komponent | Technológia | Dôvod |
+|---|---|---|
+| Runtime | **Node.js (LTS)** | Jednotný jazyk naprieč backendom a frontendom (TypeScript), zrelý ekosystém |
+| Jazyk | **TypeScript** | Type safety naprieč všetkými servismi, zdieľané typy s frontendom |
+| Framework | **Fastify** | Nízka réžia, výborný plugin ekosystém, schema validácia natívna |
+| MongoDB klient | **Native MongoDB driver** | Žiadna ORM abstrakcia, plná kontrola, najlepší výkon |
+| Validácia | **Zod** | Runtime validácia vstupov, automatické TypeScript typy zo schém |
+| DB schémy | **JSON Schema** generované zo Zod schém | Server-side validácia v MongoDB collections, defence in depth |
+| MCP rozhranie | **@modelcontextprotocol/sdk** (TypeScript) | Oficiálny SDK |
+
+### Frontend
+
+| Komponent | Technológia | Dôvod |
+|---|---|---|
+| Framework | **Next.js 15 (App Router)** | React Server Components, server actions, vstavané SEO, image optimization |
+| Jazyk | **TypeScript** | |
+| State | **TanStack Query** + React state | Štandard pre server state v Next.js |
+| Styling | **Tailwind CSS** + komponenty | Rýchly vývoj, konzistentnosť |
+| Component library | TBD (`shadcn/ui` ako kandidát) | |
+| Forms | **React Hook Form** + Zod | Zdieľané Zod schémy s backendom |
+| i18n | **next-intl** | Natívna podpora pre App Router |
+
+### Persistencia a podporné služby
+
+| Komponent | Technológia | Dôvod |
+|---|---|---|
+| Primárna DB | **MongoDB Atlas** | Managed, zálohovanie, encryption, monitoring v balíku |
+| Vyhľadávanie | **Atlas Search** | Lucene engine v Atlas, žiadny separátny OpenSearch cluster |
+| Object storage | **S3-kompatibilné** (MinIO on-prem alebo cloud S3) | Štandard, široká podpora knižníc |
+| Cache | **Redis** | Cache, rate limiter, sessions |
+| Pub/Sub | **Redis Pub/Sub** | Real-time delivery v Courier (nezávislé od MongoDB Change Streams) |
+| Reverse proxy + TLS | **Caddy** alebo **Traefik** | On-demand TLS pre custom domény organizácií |
+| OIDC provider | **Keycloak** alebo **Authentik** | Štandard, audit-friendly, multi-tenant friendly |
+
+### Observability
+
+| Komponent | Technológia |
+|---|---|
+| Metriky | Prometheus + Grafana (alebo Atlas Monitoring + Grafana Cloud) |
+| Logy | Loki alebo Atlas log forwarding |
+| Tracing | OpenTelemetry + Jaeger |
+| Alerting | Prometheus Alertmanager + PagerDuty/Opsgenie |
+| Status page | `status.activity.sportup.sk` (statuspage.io alebo self-hosted Cachet) |
+
+## Tri MCP servery
+
+Každý MCP server je **samostatná Node.js (Fastify) služba**, deployovaná nezávisle. MCP rozhranie je primárne, REST API je druhotné (cez API gateway).
+
+### registry-mcp
+
+Autoritatívne registre. Beží na `registry-mcp.activity.sportup.sk`.
+
+**Resources** (MCP koncept — read-only objekty):
+- `registry://persons/{id}` — fyzické osoby
+- `registry://organizations/{id}` — právnické osoby (kluby, zväzy)
+- `registry://licenses/{id}` — licencie odborníkov
+- `registry://codelists/{name}` — číselníky (kategórie, témy, kompetencie, atď.)
+
+**Tools** (MCP koncept — operácie):
+- `register_person`, `update_person`, `deactivate_person`
+- `assign_license`, `renew_license`, `revoke_license`
+- `lookup_person_by_identifier` — hľadanie podľa rodného čísla, IČO, alebo emailu
+
+**Charakter:** vysoká autorita, nízka frekvencia zápisu, vysoká frekvencia čítania. Tu žijú dáta, ktoré sa môžu pretrieť do projektu [ltksolutions/sportup.sk](https://github.com/ltksolutions/sportup.sk).
+
+**MongoDB databáza:** `activity_registry` (samostatná logická DB v Atlas clustri, alebo samostatný cluster pri vyšších objemoch).
+
+### activity-mcp
+
+Všetko, čo sa deje. Beží na `activity-mcp.activity.sportup.sk`.
+
+**Resources**:
+- `activity://activities/{type}/{id}` — generický pohľad na aktivitu
+- `activity://persons/{id}/activities` — všetky aktivity osoby
+- `activity://mentorships/{id}` — mentoringové cykly
+- `activity://mentorships/{id}/sessions` — sedenia v cykle
+- `activity://activities/{type}/{id}/comments` — komentáre
+
+**Tools**:
+- `log_training`, `log_match`, `log_medical_treatment`, `log_donation`
+- `create_mentoring_cycle`, `log_mentoring_session`, `complete_mentoring_cycle`
+- `add_activity_comment`, `edit_activity_comment`, `delete_activity_comment`
+
+**Charakter:** vysoká frekvencia zápisu i čítania, časová os.
+
+**MongoDB databáza:** `activity_main`.
+
+### courier-mcp
+
+Chat a komunikácia. Beží na `courier-mcp.activity.sportup.sk`.
+
+**Resources**:
+- `courier://conversations/{id}` — metadáta a účastníci
+- `courier://conversations/{id}/messages` — správy (cursor-paginated)
+- `courier://persons/{id}/conversations` — zoznam pre osobu
+
+**Tools**:
+- `create_conversation`, `add_participant`, `remove_participant`
+- `send_message`, `edit_message`, `delete_message`
+- `link_message_to_activity` — most do mentoring sedenia
+- `report_message` — moderation
+
+**Charakter:** real-time, citlivé dáta, E2E pre direct konverzácie.
+
+**MongoDB databáza:** `activity_courier`. Real-time delivery cez **Redis Pub/Sub** kanál (nie cez MongoDB Change Streams) — kľúčový dôvod: oddelená infraštruktúra, courier-mcp môže fungovať aj keď MongoDB cluster má replikačné zaostávanie.
+
+Detailná API špecifikácia všetkých troch je v [mcp-servers](mcp-servers).
+
+## Prečo MongoDB pre tento systém
+
+Toto rozhodnutie má dôsledky pre celý dátový model, takže stojí za vysvetlenie.
+
+**Doménové dáta sú prirodzene dokumentové.** Mentoringové sedenie nie je sada normalizovaných tabuliek — je to bohatý dokument so zoznamami tém, kompetenčných tagov, prepojených materiálov. V MongoDB je to jeden dokument, prirodzené ho zapisovať aj čítať.
+
+**Polymorfné komentáre sú natívny vzor.** V relačnom svete by sme si museli vybrať medzi (a) jednou tabuľkou s nullable FK pre každý typ aktivity, (b) tabuľkou per typ s redundantnou logikou, (c) polymorfným vzorom s `activity_type + activity_id` bez referenčnej integrity. V MongoDB je posledné riešenie štandardom — žiadny kompromis.
+
+**Multi-tenancy je flexibilná.** Vzor *shared collection s `tenantId`* dobre funguje v oboch svetoch, ale v MongoDB sa indexy na `(tenantId, ...)` ukladajú efektívnejšie a query plány sú jednoduchšie.
+
+**Atlas Search je v balíku.** Full-text vyhľadávanie cez Lucene priamo v Atlas — bez separátneho OpenSearch clusteru, bez synchronizačnej pipelinky.
+
+**Schémy v aplikácii.** Validácia ide cez Zod (runtime + TS typy) + JSON Schema validátor v collection (server-side). Žiadne migrácie typu *"ALTER TABLE"* — pridanie nového poľa je len zmena v Zod schéme + voliteľná aktualizácia JSON Schema validátora.
+
+### Kde MongoDB **nedáva** to isté čo PostgreSQL
+
+Treba si byť vedomý kompromisov:
+
+**Žiadne foreign keys ani CHECK constraints.** Cross-collection invarianty (*"recorded_by sedenia musí byť rovnaký ako mentor cyklu"*) sa vynucujú v aplikačnej vrstve. Toto musí byť disciplinovane riešené v servisnej vrstve, nie ad-hoc v každom endpointe.
+
+**Žiadny Row-Level Security.** Bezpečnostné scoping je v aplikačnom kóde (autorizačný middleware). Defence-in-depth je oslabený. Mitigácia: jeden centralizovaný autorizačný layer, audit log, dôkladné testy.
+
+**Multi-document transactions sú možné, ale nie zadarmo.** MongoDB ich vie od 4.0, ale sú drahšie ako single-document operácie. Dizajn dát musí preferovať operácie, ktoré sa zmestia do jedného dokumentu (napr. `MentoringCycle.status` zmena je single-doc atomic operácia).
+
+Detaily implementácie cross-collection invariantov sú v [domain-model](domain-model).
+
+## Doménový model (URL)
+
+### Subdomény
+
+| Subdoména | Účel | Bežiaca technológia |
+|---|---|---|
+| `sportup.sk` | marketing, verejná stránka | Next.js 15 (statická + ISR), nasadené napr. na Vercel |
+| `activity.sportup.sk` | hlavná webová aplikácia | Next.js 15 (App Router) |
+| `admin.activity.sportup.sk` | administrácia organizácií | Next.js 15 (App Router) |
+| `api.activity.sportup.sk` | REST API gateway | Fastify |
+| `auth.activity.sportup.sk` | OIDC identity provider | Keycloak alebo Authentik |
+| `registry-mcp.activity.sportup.sk` | MCP registre | Fastify + MCP SDK |
+| `activity-mcp.activity.sportup.sk` | MCP aktivity | Fastify + MCP SDK |
+| `courier-mcp.activity.sportup.sk` | MCP chat | Fastify + MCP SDK + Redis Pub/Sub |
+| `cdn.activity.sportup.sk` | statický obsah, prílohy | S3-kompatibilný + CloudFront/Bunny |
+| `status.activity.sportup.sk` | status page | externe alebo self-hosted |
+
+Každá subdoména má vlastný TLS certifikát (Let's Encrypt cez Caddy/Traefik) a vlastný deployment.
+
+### Multi-tenancy a custom domény
+
+Systém je multi-tenantový. Každá organizácia má svoju subdoménu pod `activity.sportup.sk` (napr. `sfz.activity.sportup.sk`).
+
+Veľké organizácie môžu používať vlastnú custom doménu cez CNAME:
+
+```
+DNS u SFZ:
+  TXT  _activity-verify.clenovia.futbalsfz.sk  →  av-a8f2k9...   (overenie)
+  CNAME clenovia.futbalsfz.sk                  →  clients.activity.sportup.sk
+```
+
+**Reverse proxy** (Caddy alebo Traefik) má `on-demand TLS` zapnuté. Pred vystavením certifikátu zavolá náš API endpoint `/api/internal/check-domain?host=...`, ktorý overí, či je doména v MongoDB ako `active`.
+
+#### Multi-tenancy v MongoDB
+
+Implementačný vzor: **shared collections s `tenantId` poľom**. Všetky business collections majú `tenantId`. Compound indexy začínajú s `tenantId`:
+
+```javascript
+// Príklad: indexy na mentoringSession collection
+db.mentoringSession.createIndex({ tenantId: 1, cycleId: 1, occurredAt: -1 })
+db.mentoringSession.createIndex({ tenantId: 1, status: 1 })
+db.mentoringSession.createIndex({ tenantId: 1, recordedByPersonId: 1 })
+```
+
+**Backend middleware** (Fastify hook) pri každom requeste:
+
+1. Číta `Host` header
+2. Lookup do `organizationDomain` collection
+3. Nastavuje `request.tenantId` pre celú request lifecycle
+4. Servisná vrstva automaticky pridáva `tenantId` filter do každého MongoDB query
+
+Toto je vynucované cez wrapper okolo MongoDB collection objektu, ktorý automaticky pridáva `{ tenantId }` filter — vývojári nemajú možnosť napísať query bez tenant scopingu (defence in depth).
+
+#### Schéma OrganizationDomain
+
+```typescript
+// MongoDB collection: organizationDomain
+{
+  _id: ObjectId,
+  organizationId: ObjectId,
+  hostname: "clenovia.futbalsfz.sk",        // unique
+  isPrimary: true,
+  status: "active",                          // pending_verification | active | disabled
+  verifyToken: "av-a8f2k9...",
+  verifiedAt: ISODate,
+  tlsStatus: "issued",                       // not_yet | issuing | issued | failed
+  tlsIssuedAt: ISODate,
+  tlsExpiresAt: ISODate,
+  createdAt: ISODate,
+  updatedAt: ISODate
+}
+```
+
+JSON Schema validátor a Zod schéma idú v páre — viď [domain-model](domain-model) pre kompletný vzor.
+
+### Custom branding
+
+Každá organizácia môže nastaviť (cez admin panel):
+
+- vlastné logo (SVG alebo PNG, upload do S3)
+- accent farbu (jedna hex hodnota, validovaná)
+
+Layout, typografia a všeobecná vizuálna identita zostávajú konzistentné.
+
+## Identita a autentifikácia
+
+### OIDC ako jadrová architektúra
+
+`auth.activity.sportup.sk` je OIDC (OpenID Connect) provider. Všetky aplikácie a subdomény (vrátane custom domén) sú registrované ako *relying parties*.
+
+Prečo OIDC namiesto session cookies na `.activity.sportup.sk`:
+
+1. Custom domény (`clenovia.futbalsfz.sk`) nezdieľajú cookie scope so `*.activity.sportup.sk` — OIDC redirect flow rieši tento problém štandardne
+2. Mobilná aplikácia, AI agenti a externé integrácie potrebujú OAuth tokens, nie sessions
+3. SSO medzi subdoménami je jednoduchšie a bezpečnejšie
+
+### Tok prihlásenia
+
+```
+Užívateľ → activity.sportup.sk
+         ← redirect na auth.activity.sportup.sk?return_to=...
+         → auth.activity.sportup.sk (login form)
+         ← redirect späť s authorization code
+         → activity.sportup.sk vymení code za access + refresh token (cez API gateway)
+         ← cookie nastavený na danej doméne (httpOnly, sameSite: lax)
+```
+
+Pre custom doménu funguje rovnako — `clenovia.futbalsfz.sk` redirektuje na `auth.activity.sportup.sk`, ten po prihlásení redirektuje späť. Žiadne special-case kódy, čistý OIDC.
+
+### Tokeny a ich životnosť
+
+- **Access token** — krátka životnosť (15 min), JWT, nesie identitu a scope
+- **Refresh token** — dlhšia životnosť (30 dní), opaque, validovaný cez introspection
+- **MCP scopes** — granulárne povolenia (`registry.read`, `activity.write`, `courier.read`, atď.) priraďované per relying party a per povolenie užívateľa
+
+### Autorizácia v aplikačnej vrstve
+
+Bez RLS v MongoDB je autorizácia plne v aplikačnom kóde. Architektonický vzor:
+
+```typescript
+// Pseudo-kód autorizačnej vrstvy
+async function authorizeRead(user, resourceType, resourceId): Promise<boolean> {
+  const rules = aclRulesFor(resourceType);
+  for (const rule of rules) {
+    if (await rule.evaluate(user, resourceId)) return true;
+  }
+  // audit log: failed authz attempt
+  return false;
+}
+
+// Použitie
+const session = await db.mentoringSession.findOne({ _id: id, tenantId });
+if (!await authorizeRead(req.user, 'mentoringSession', id)) {
+  throw new ForbiddenError();
+}
+return session;
+```
+
+ACL pravidlá per typ záznamu sú v [acl/](acl/).
+
+## Multi-jazyková podpora
+
+### URL štruktúra
+
+Hybrid podľa typu povrchu:
+
+- **Marketingová stránka (`sportup.sk`)** — jazyk v ceste: `sportup.sk/sk/...`, `sportup.sk/en/...`. SEO friendly.
+- **Aplikácia (`activity.sportup.sk` a custom domény)** — bez jazyka v URL. Jazyk podľa profilu.
+
+Implementácia v Next.js 15: `next-intl` knižnica s `localePrefix: 'always'` pre marketing a `localePrefix: 'never'` pre aplikáciu.
+
+### Detekcia jazyka
+
+Pri každom requeste:
+
+1. Ak je užívateľ prihlásený a má v profile `language` → použiť ten
+2. Inak ak má cookie `preferred_language` → použiť ten
+3. Inak parsovať `Accept-Language` header, vybrať prvý podporovaný (z SK/CS/EN/...)
+4. Inak default `EN`
+
+### Prepínač jazyka
+
+V hlavičke aplikácie (vedľa profilového avataru) — kompaktný dropdown so skratkou jazyka (`SK ▾`). Mení atribút `language` v profile a triggeruje re-render Next.js stránky.
+
+V profilových nastaveniach (*Profil → Jazyk a región*) je kanonický zdroj.
+
+### Vrstvy lokalizácie
+
+**UI texty** — JSON súbory v `messages/{locale}.json`, načítavané cez `next-intl`.
+
+**Číselníky** — multi-language dokumenty v MongoDB:
+
+```typescript
+// codelistValue collection
+{
+  _id: ObjectId,
+  codelist: "mentoring_session_topic",
+  code: "rule_interpretation",
+  ordering: 1,
+  translations: {
+    sk: { label: "Výklad pravidla", description: "..." },
+    en: { label: "Rule interpretation", description: "..." },
+    cs: { label: "Výklad pravidla", description: "..." }
+  }
+}
+```
+
+Embedded translations (vnútri dokumentu) namiesto separátnej collection — číselníkové hodnoty sa čítajú vždy s prekladmi, embedding je tu efektívnejší.
+
+Fallback: ak chýba preklad pre jazyk, použije sa `en` ako finálny default.
+
+**Užívateľský obsah** — bez prekladu, zostáva v jazyku autora.
+
+### Plán nasadenia jazykov
+
+1. **MVP**: SK
+2. **Fáza 2**: CS + EN
+3. **Fáza 3**: ďalšie podľa potreby (DE, PL, HU sú kandidáti)
+
+Translation governance: profesionálny preklad pre core UI a oficiálne číselníky, crowdsourcing pre rozšírenia (s validáciou cez admin).
+
+## Deployment topológia
+
+### Prostredia
+
+- **Development** — lokálne docker compose stack (MongoDB Atlas Local alebo Mongo container, Redis, MinIO, Keycloak)
+- **Staging** — `staging.activity.sportup.sk` a paralelné staging subdomény
+- **Production** — `sportup.sk` a všetky popisované subdomény
+
+### Cloud platforma
+
+Cieľ je byť **cloud-agnostic** v rozumnej miere. Konkrétny návrh:
+
+- **MongoDB Atlas** — managed, globálna dostupnosť, multi-region replica set
+- **Frontend (Next.js)** — Vercel pre marketing, vlastný hosting (Hetzner/AWS) pre aplikáciu (kvôli kontrolovaným cenám pri škálovaní)
+- **Backend (Node.js MCP servery + API gateway + Auth)** — Kubernetes (EKS/GKE) alebo VM-based (Hetzner Cloud, dôraz na cenu)
+- **Object storage** — Cloudflare R2 alebo Backblaze B2 (lacnejšie egress než AWS S3)
+- **Redis** — managed (Upstash, Redis Cloud) alebo self-hosted
+
+### Deployment cyklus
+
+Každý komponent má vlastný deployment:
+
+- Frontend (Next.js) — push do Git → CI build → deploy
+- Backend služby — push do Git → CI build → Docker image → deploy do Kubernetes
+- MongoDB schémy (Zod + JSON Schema) — verzionované v repo, pri deploy backend služba si overí, že DB validátor je aktuálny
+
+Schéma migrácie sú menej časté než v Postgrese (MongoDB je *schema-on-write* podľa aktuálnej Zod schémy). Keď zmena vyžaduje migráciu existujúcich dokumentov (napr. premenovanie poľa, rozdelenie collection), spúšťa sa **migration job** ako samostatný proces s dokumentovaným postupom.
+
+### Škálovanie
+
+| Komponent | Stratégia škálovania |
+|---|---|
+| Next.js | Horizontálne, stateless |
+| MCP servery | Horizontálne, stateless, behind load balancer |
+| MongoDB Atlas | Vertikálne (väčší tier) na začiatku, sharding pri vyšších objemoch |
+| Atlas Search | Súčasť Atlas, škáluje s clustrom |
+| Redis | Read replicas pri čítaní, master pre Pub/Sub |
+| Object storage | CDN frontuje (cdn.activity.sportup.sk) |
+
+Courier ako real-time subsystém má samostatný profil — vyžaduje WebSocket alebo SSE infraštruktúru. Plánujeme **Server-Sent Events** ako primárny mechanizmus (jednoduchšie ako WebSocket, dostatočne real-time pre chat, prešívanie cez load balancery je trivialne s sticky sessions).
+
+## Bezpečnostná architektúra
+
+Detailne v [ops/retention-and-gdpr](ops/retention-and-gdpr). V skratke:
+
+- **Šifrovanie v pokoji** — MongoDB Atlas Encryption at Rest, S3 SSE
+- **Šifrovanie pri prenose** — TLS 1.3 minimum, mTLS medzi internými servismi
+- **E2E pre direct konverzácie** — kľúče len u klientov, server vidí len ciphertext
+- **Audit log** — vlastná `auditLog` collection v MongoDB, každý prístup k citlivým záznamom
+- **Application-level security** — autorizačný middleware ako jediný gate, dôkladne testovaný
+- **Rate limiting** — per IP, per token, per endpoint (Redis-backed)
+- **CORS** — explicitne whitelisted origins, žiadne wildcardy
+- **CSP** — striktná Content Security Policy pre všetky webové aplikácie
+- **MongoDB Field-Level Encryption** (zvážiť pre veľmi citlivé polia ako `identifierNational`)
+
+## Voľba technológií — racionál
+
+Tento systém je *long-term play* — beží 10+ rokov. Výber technológií reflektuje stabilitu, nie módu.
+
+- **MongoDB Atlas** — managed, encryption, backup, monitoring, Atlas Search v jednom balíku
+- **Native MongoDB driver + Zod** — žiadna ORM abstrakcia, schémy v aplikácii cez Zod, server-side validácia v collection cez JSON Schema
+- **Node.js + TypeScript** — jednotný jazyk frontend/backend, zdieľané typy
+- **Next.js 15 App Router** — RSC, server actions, vstavané SEO, image optimization
+- **Fastify** — najrýchlejší stable Node.js framework, schema-validation native
+- **OIDC namiesto custom auth** — štandardizovaný protokol, knižnice pre všetky jazyky, audit-friendly
+- **MCP namiesto čistého REST** — okrem našich aplikácií budú s API komunikovať aj AI agenti
+- **Subdomény namiesto path-based routing** — nezávislé deploys, oddelená bezpečnosť, jednoduchší TLS
+- **Caddy/Traefik pre on-demand TLS** — automatický ACME, vstavané, žiadny custom orchestrátor
+- **Redis Pub/Sub pre Courier real-time** — nezávislé od MongoDB, jednoduchá horizontálna škálovateľnosť
+
+## Nasleduje
+
+Pre detail dátového modelu pokračuj v [domain-model](domain-model).
+Pre API špecifikáciu MCP serverov pokračuj v [mcp-servers](mcp-servers).
+Pre väzbu na existujúci sportup.sk projekt pokračuj v [sportup-sk-integration](sportup-sk-integration).

@@ -1,0 +1,519 @@
+# UI Mockups
+
+Tento dokument popisuje **kľúčové UI obrazovky** systému. Mockupy sú v textovej / štruktúrovanej forme — finálne pixel-perfect dizajny budú v Figme po zložení tímom dizajnéra. Účelom tu je zachytiť **funkčnú štruktúru**, **navigačné toky** a **prepojenie s doménovým modelom**.
+
+## Globálna navigácia
+
+### Web app (activity.sportup.sk)
+
+Hlavná navigácia v hornej lište:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  [LOGO sportup]    Domov  Aktivity  Mentoring  Chat       👤▾ 🔔   │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│                          MAIN CONTENT                               │
+│                                                                     │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+- **Logo** — kliknutím Domov
+- **Domov** — dashboard pre danú rolu
+- **Aktivity** — timeline všetkých aktivít užívateľa
+- **Mentoring** — len pre osoby s mentor / mentee rolou; cykly a sedenia
+- **Chat** — Courier inbox
+- **👤▾** — profil dropdown (môj profil, nastavenia, organizácie, log out)
+- **🔔** — notifikácie dropdown s posledných 10 notifikácií + linkom na full inbox
+
+Sub-navigácia per sekcia (kontextová) je v ľavom side panele alebo cez tabs.
+
+### Admin app (admin.activity.sportup.sk)
+
+Iné navigačné štruktúre — orientované na správu organizácie:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  [LOGO admin] {Org Name ▾}                                  👤▾ 🔔  │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Dashboard | Členovia | Tímy | Aktivity | Komunikácia | Reporty    │
+│                                                                     │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Mobile app
+
+Bottom navigation:
+
+```
+[🏠 Domov]  [📋 Aktivity]  [💬 Chat]  [👤 Profil]
+```
+
+Pre operácie ako *Vytvoriť sedenie* — floating action button v rohu.
+
+## Dashboard (per rola)
+
+Dashboard sa **adaptuje** na primárnu rolu užívateľa. Všetky majú spoločnú kostru, líšia sa obsahom.
+
+### Rozhodca
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  Vitaj späť, Tomáš 👋                                                │
+│  Rozhodca · Slovenský futbalový zväz · Trieda III                   │
+└────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────┐  ┌─────────────────────────────────┐
+│  📅  Najbližšie aktivity         │  │  📊  Tento mesiac               │
+├─────────────────────────────────┤  ├─────────────────────────────────┤
+│  ● 12.4. 14:00 · ŠK X – AC Y   │  │  Rozhodované zápasy: 4           │
+│    Hlavný rozhodca · 3. liga   │  │  Mentoringové sedenia: 2         │
+│  ● 18.4. 16:30 · MŠK Z – FK W  │  │  Tréningové hodiny: 18           │
+│    Asistent · 2. liga          │  │  Vzdelávacie kredity: 12 / 30    │
+└─────────────────────────────────┘  └─────────────────────────────────┘
+
+┌─────────────────────────────────┐  ┌─────────────────────────────────┐
+│  🎓  Mentoring                   │  │  ⚠️  Notifikácie                │
+├─────────────────────────────────┤  ├─────────────────────────────────┤
+│  Mentor: Peter Novák (UEFA)     │  │  • Nové hodnotenie zo zápasu    │
+│  Cyklus 8. mesiacov · Aktívny  │  │    8.4. (+12h)                   │
+│  Posledné sedenie: pred 6 dňami │  │  • Mentor Peter zaznamenal      │
+│  [Detail cyklu →]                │  │    sedenie (+1d)                 │
+│  [+ Navrhnúť sedenie]           │  │  [Všetky notifikácie →]          │
+└─────────────────────────────────┘  └─────────────────────────────────┘
+```
+
+### Tréner
+
+```
+Vitaj späť, Marta 👋
+Tréner mládeže U13 · ŠK Slovan Bratislava · Trieda B
+
+┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
+│ Tímy pod vedením    │ │ Najbližšie tréningy │ │ Pripravované        │
+│ • U13 (24 hráčov)   │ │ • Dnes 17:00        │ │ hodnotenia          │
+│ • U15 asistent      │ │ • Štvrtok 16:00     │ │ • 5 hráčov          │
+└─────────────────────┘ └─────────────────────┘ └─────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  👥  Aktívni hráči U13 — najnovšie aktivity                         │
+├─────────────────────────────────────────────────────────────────────┤
+│  Adamko Novák    | tréning včera     | 🟢                          │
+│  Janko Zelený    | zranenie 3.4.     | ⚠️                          │
+│  Petra Mlinárik  | tréning včera     | 🟢                          │
+│  ...                                                                 │
+│  [Plný zoznam →]                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Športovec (mladý)
+
+```
+Vitaj späť, Adamko 👋
+Hráč U15 · ŠK Slovan
+
+┌─────────────────────┐ ┌─────────────────────┐
+│ Najbližší zápas     │ │ Tento týždeň        │
+│ Sobota 10:00        │ │ Tréningy: 3 / 4     │
+│ ŠK Slovan – AC Mlb. │ │ Hodín spolu: 5.5    │
+│ Štadión X           │ │                      │
+└─────────────────────┘ └─────────────────────┘
+
+[+ Označiť účasť na tréningu]
+[+ Pridať hodnotenie pocitu]
+```
+
+### Rodič
+
+```
+Vitaj späť, Peter 👋
+Rodič: Adamka Nováka (U15) | Janka Nováka (U13)
+
+┌────────────────────────────────────────────────────────────────────┐
+│  ADAMKO U15 — Najnovšie                                              │
+│  • Tréning dnes 17:00 (potvrdené)                                    │
+│  • Hodnotenie z minulého zápasu (čítať)                              │
+│  • Nová správa od trénera                                            │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│  JANKO U13 — Najnovšie                                              │
+│  • Tréning zrušený (info pre rodičov)                                │
+│  • Lekárska prehliadka 15.4.                                         │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+## Profil športovca
+
+Pre vlastný profil:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│   ┌────────┐   Tomáš Mlinárik                          [Edit profil]│
+│   │ FOTO   │   Stredopoliar · ŠK Slovan · 24 rokov                  │
+│   │        │   Reprezentant SR U21                                  │
+│   └────────┘                                                         │
+└────────────────────────────────────────────────────────────────────┘
+
+[Aktivity] [Štatistiky] [Mentoring] [Vzdelávanie] [Zdravie] [Sponzori]
+
+(Zdravie sekcia je viditeľná len užívateľovi, klubovému lekárovi a rodičovi maloletého)
+```
+
+Pre profil iného športovca (z perspektívy fanúšika):
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│   ┌────────┐   Tomáš Mlinárik                          [Sledovať]   │
+│   │ FOTO   │   Stredopoliar · ŠK Slovan                              │
+│   │        │   12 zápasov tejto sezóny · 3 góly                       │
+│   └────────┘                                                         │
+└────────────────────────────────────────────────────────────────────┘
+
+[Štatistiky] [Najnovšie zápasy] [News]
+
+(Zdravie, mentoring, hodnotenia sú schované)
+```
+
+## Mentoring detail
+
+### Cyklus — pohľad mentora
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ ← Naspäť                                                            │
+│                                                                     │
+│  Mentoringový cyklus                                                │
+│  Peter Novák (mentor) ↔ Tomáš Vilček (mentee)                      │
+│  Futbal · UEFA úroveň · Aktívny 8 mesiacov                          │
+│                                                                     │
+│  [+ Nové sedenie]  [💬 Otvoriť Courier]  [⋯ Viac]                  │
+└────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ 🎯 Sedenia      │ │ ⏱️ Hodiny       │ │ 📅 Posledné     │ │ 👥 Účastníci    │
+│      12         │ │      18.5       │ │  pred 6 dňami   │ │       3         │
+└─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│  Externí mentori                                                    │
+│  • Roberto Rosetti (UEFA)  [Pridať externého mentora]              │
+└────────────────────────────────────────────────────────────────────┘
+
+📋 Všetky sedenia (najnovšie najprv)
+
+┌────────────────────────────────────────────────────────────────────┐
+│ ✅ Recorded · 6.4. 14:00 · 60 min · in-person                       │
+│   Témy: pre-match preparation, rule_interpretation                  │
+│   Summary: "Príprava pred zápasom Slovan-Spartak..."                 │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ ⏳ Draft (autor: ja)  · auto-saved 12s ago                          │
+│   [Pokračovať] [Zmazať draft]                                        │
+└────────────────────────────────────────────────────────────────────┘
+
+...
+```
+
+### Cyklus — pohľad mentee
+
+Rovnaké ako mentor, ale:
+
+- Akčná lišta: `[+ Navrhnúť sedenie]  [💬 Otvoriť Courier]  [⋯ Viac]`
+- Drafty mentora **nie sú** viditeľné
+- Súkromná poznámka mentora **nie je** viditeľná v zozname ani v detaile
+
+## Mentoring sedenie — vyplnenie
+
+### Mentor vypĺňa formulár
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ ← Naspäť do cyklu                                                   │
+│                                                                     │
+│  Mentoringové sedenie                                               │
+│  Cyklus: Peter Novák ↔ Tomáš Vilček                                 │
+│  Stav: Draft · Auto-uložené pred 12s                                │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Sekcia 1 — Kontext                                                   │
+│  Mentor: Peter Novák (ja)                                            │
+│  Mentee: Tomáš Vilček                                                │
+│  Iniciátor: ja                                                       │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Sekcia 2 — Kedy a ako                                               │
+│                                                                     │
+│  Dátum a čas:    [12. 4. 2026 14:00]                                 │
+│  Trvanie:        [60] minút                                          │
+│  Forma:          [In-person ▾]                                       │
+│  Miesto:         [Kaviareň Cafe Stará Tržnica]                       │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Sekcia 3 — O čom (povinné)                                          │
+│                                                                     │
+│  Témy: [match_situation_review ✕] [pre_match_preparation ✕] [+]      │
+│                                                                     │
+│  Odkaz na zápas: [Vyhľadávač zápasu...]                              │
+│                                                                     │
+│  Summary (min 50 znakov): ┌──────────────────────────────────────┐ │
+│                            │ Pri rozbore sme sa zamerali na...     │ │
+│                            │                                       │ │
+│                            └──────────────────────────────────────┘ │
+│                                                                     │
+│  Outcome (min 30 znakov): ┌──────────────────────────────────────┐ │
+│                            │ Tomáš preukázal pochopenie pravidla   │ │
+│                            └──────────────────────────────────────┘ │
+│                                                                     │
+│  Next steps (voliteľné): [text...]                                   │
+│                                                                     │
+│  Kompetenčné tagy: [Hra po písknutí ✕] [+ Pridať tag]              │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Sekcia 4 — Materiály a väzby                                        │
+│                                                                     │
+│  Prílohy: [+ Pridať] (obrázky, PDF, dokumenty)                       │
+│  Externé linky: [+ Pridať] (videá, články)                           │
+│                                                                     │
+│  ─── Prepojené správy z Courier ─── 12 správ (1.4. – 5.4.) ───      │
+│  [Zobraziť rozsah →]                                                 │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Sekcia 5 — Súkromná poznámka mentora                                 │
+│                                                                     │
+│ 🔒 Mentee NEVIDÍ                                                    │
+│                                                                     │
+│  ┌──────────────────────────────────────┐                           │
+│  │ Pre seba: Tomáš ešte stále má prob...   │                           │
+│  └──────────────────────────────────────┘                           │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│  Po uložení sa mentee notifikuje. Editácia bude možná 24 h.         │
+│                                                                     │
+│              [Uložiť ako Draft]   [Uložiť ako Recorded]              │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Detail uloženého sedenia — pohľad mentora
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ ← Naspäť do cyklu                                                   │
+│                                                                     │
+│  Mentoringové sedenie · 12.4.2026 14:00                             │
+│  ✅ Recorded                                                         │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ ⚠️  Editovateľné ešte 18:32:14                                       │
+│    Po vypršaní bude sedenie uzavreté.                                │
+│    [Editovať] [Zrušiť sedenie]                                       │
+└────────────────────────────────────────────────────────────────────┘
+
+(Read-only zobrazenie všetkých polí)
+
+🔒 Súkromná poznámka mentora — len ja vidím
+   Tomáš ešte stále má problémy s ofsajdovým rozhodovaním...
+
+─── Prepojené správy z Courier ─── [Otvoriť rozsah →] ───
+
+💬 Komentáre (3)
+
+   👤 Tomáš Vilček · pred 2h
+      Vďaka, naučil som sa veľa, najmä o tej pre-match koncentrácii.
+      [Reply]
+
+   👤 Peter Novák (ja) · pred 1h
+      ↪ Skús si zapísať svoje pocity hneď po zápase, bude to pomáhať.
+      [Edit] [Delete]
+
+   [+ Pridať komentár...]
+```
+
+### Detail uloženého sedenia — pohľad mentee
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ ← Naspäť do cyklu                                                   │
+│                                                                     │
+│  Mentoringové sedenie · 12.4.2026 14:00                             │
+│  ✅ Recorded                                                         │
+└────────────────────────────────────────────────────────────────────┘
+
+ℹ️ Tento záznam vytvoril tvoj mentor — ak niečo nesedí, napíš mu cez
+   Courier alebo v diskusii nižšie.
+
+(Read-only zobrazenie všetkých polí, OKREM súkromnej poznámky)
+
+⭐ Ďalšie kroky pre teba:
+   ┌──────────────────────────────────────────────────────┐
+   │ Pred ďalším zápasom si pozri video z 78. minúty...   │
+   └──────────────────────────────────────────────────────┘
+
+💬 Komentáre (3)
+   ...
+   Tvoj komentár uvidí mentor a predseda komisie.
+   [+ Pridať komentár...]
+```
+
+## Courier
+
+### Inbox
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  💬 Chat                                                             │
+│                                          [+ Nová konverzácia]        │
+├────────────────────────────────────────────────────────────────────┤
+│  [🔍 Hľadať...]                                                      │
+│                                                                     │
+│  [Všetky] [Neprečítané (3)] [Skupiny] [Broadcasty]                  │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│ 👤  Peter Novák                              pred 5 min · ●        │
+│     "Skvele, uvidíme sa zajtra"                                      │
+├────────────────────────────────────────────────────────────────────┤
+│ 👥  Komisia rozhodcov SFZ (12)                pred 2h               │
+│     "Andrej: Pre tých z vás, ktorí budú chcieť zúčastniť sa..."     │
+├────────────────────────────────────────────────────────────────────┤
+│ 📢  ŠK Slovan — Oznamy pre fanúšikov          pred 4h · ⓘ          │
+│     "Predĺženie predpredaja na zápas..."                             │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Direct chat
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  ← 👤 Peter Novák                              ⚙️                   │
+│      🔒 E2E šifrované                                                │
+└────────────────────────────────────────────────────────────────────┘
+                              Včera 14:23
+┌─────────────────────────────────────────────────────┐
+│ Tomáš, pozri si video z minulého zápasu, hlavne     │
+│ 78. minútu. Tam je krásny rozbor situácie.          │
+│                                            14:23   │
+└─────────────────────────────────────────────────────┘
+
+                                                            14:25
+                          ┌─────────────────────────────────────────┐
+                          │ Diky, idem si to pozrieť hneď.          │
+                          │                                  ✓✓     │
+                          └─────────────────────────────────────────┘
+
+                              Dnes 09:45
+┌─────────────────────────────────────────────────────┐
+│ Skvele, uvidíme sa zajtra                            │
+│                                            09:45   │
+└─────────────────────────────────────────────────────┘
+
+[Peter píše...]
+
+┌────────────────────────────────────────────────────────────────────┐
+│  [📎] [Napíš správu...]                                  [Send]      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Group chat — tímový (s proxy rodičmi)
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  ← 👥 ŠK Slovan U13 — Oznamy                          12 členov ⚙️ │
+└────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ 🟦 Peter Novák (rodič Adamka)                        │
+│ Adamko bude v stredu chýbať, je chorý.              │
+│                                            14:23   │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ 👤 Marta (tréner)                                    │
+│ Vďaka za info, prajem skoré uzdravenie.             │
+│                                            14:25   │
+└─────────────────────────────────────────────────────┘
+```
+
+## Notifikácie
+
+### Dropdown z hlavičky
+
+```
+┌─────────────────────────────────────────────────┐
+│ 🔔 Notifikácie                                    │
+│                                                  │
+│ ● Peter Novák zaznamenal sedenie  · pred 1h     │
+│   Mentoringové sedenie · 12.4.                   │
+│                                                  │
+│ ● Nová správa od Marta · pred 2h                 │
+│   "Adamko, dnes posunieme tréning..."            │
+│                                                  │
+│ ○ Hodnotenie zo zápasu · pred 1d                 │
+│                                                  │
+│ ○ Tomáš (mentee) navrhol sedenie · pred 2d      │
+│                                                  │
+│ [Všetky notifikácie →]                           │
+└─────────────────────────────────────────────────┘
+```
+
+## Search
+
+V MVP nie je search dostupný (z dohody). Tu pre referenciu, neskôr:
+
+```
+┌─────────────────────────────────────────────────┐
+│ 🔍 Hľadaj všade...                                │
+└─────────────────────────────────────────────────┘
+
+Výsledky pre "ofsajd"
+
+📋 Mentoringové sedenia (3)
+   • 12.4.2026 — Pre-match preparation
+     "...zamerali sme sa na ofsajd v útoku..."
+   • 5.3.2026 — Match situation review
+     ...
+
+💬 Diskusia v Courier (2)
+   ...
+
+🔍 Komentáre pod aktivitami (1)
+   ...
+```
+
+## Ďalšie obrazovky
+
+V dokumentácii **odložím** dokumentáciu nasledujúcich obrazoviek (sú TBD pri detailnom dizajne):
+
+- Plánovanie tréningu (drill builder, šablóny)
+- Hodnotenie zo zápasu (sport-specific schéma)
+- Detail klubového broadcastu
+- Sponzorská aktivácia (kampaň plánovanie)
+- Antidopingový whereabouts
+- Lekársky záznam (formulár)
+- Crowdfunding kampaň
+
+## Otvorené otázky
+
+1. **Empty states a onboarding** — pre prvého užívateľa (žiadne dáta) treba dobré CTA. TBD pri prvotnom dizajne.
+
+2. **Drag-and-drop** — v admin UI pre reorganizáciu členov, tímov, atď. TBD.
+
+3. **Bulk operations UI** — pri import-e, hromadnej registrácii. TBD.
+
+4. **Print views** — niektoré dokumenty (mentoring sedenia, hodnotenia) potrebujú print-friendly verziu. TBD.
+
+5. **PDF export** — *"stiahnuť ako PDF"* pre rôzne entity. TBD.
+
+## Nasleduje
+
+Pre dizajnové princípy pokračuj v [design-principles](design-principles).
+Pre ďalšie sekcie pokračuj v [../features/](/features/) a [../workflows/](/workflows/).

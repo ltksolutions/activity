@@ -1,0 +1,269 @@
+# Rate Limits
+
+Tento dokument popisuje **rate limity** v systéme — kde sú aplikované, aké hodnoty platia pre rôzne scope-y, a ako klient detekuje a rieši rate-limited stavy.
+
+## Princíp
+
+Rate limity sú nutné pre:
+
+- **Ochrana pred zneužitím** (botnet, scraping, DoS)
+- **Fair share** (jeden tenant nezahltí systém na úkor ostatných)
+- **Cost control** (predvídateľné API náklady, najmä pri integráciách)
+- **Stabilita** (chrániť MongoDB pred pretečením write capacity)
+
+Limity sú **vrstvené** — request prejde cez viacero gate-ov:
+
+```
+Request → Cloudflare DDoS → Rate limit per IP → Rate limit per token → Rate limit per scope → MCP service
+```
+
+Každý gate má vlastný počiteľ, vlastné limity, vlastný response.
+
+## Implementačná stratégia
+
+### Sliding window counter
+
+Používame **sliding window counter** v Redis-e. Klasický fixed window má problém pri prechode okna (burst pred + burst po), sliding to vyhladí.
+
+```
+counter:rate_limit:<scope>:<window_start>
+counter:rate_limit:<scope>:<previous_window_start>
+
+current = counts[<window_start>] + counts[<previous>] * (1 - elapsed_in_current / window_size)
+```
+
+Implementácia cez Redis Lua script (atomicky), single round-trip.
+
+### Headers v response
+
+Každý response (úspešný aj neúspešný) má rate limit headers:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 47
+X-RateLimit-Reset: 1714000000
+X-RateLimit-Resource: mcp.tool.send_message
+```
+
+Pri prekročení (HTTP 429):
+
+```
+Retry-After: 30
+X-RateLimit-Reset: 1714000030
+```
+
+## Limity per kategória
+
+### Per IP (Cloudflare + edge gate)
+
+| Stav | Limit |
+|---|---|
+| Anonymous request | 30 / minútu |
+| Authenticated request | 600 / minútu |
+| Login attempts | 5 / minútu (potom 30s blok) |
+| Password reset | 3 / hodinu |
+| Registration attempts | 3 / hodinu |
+
+Týmito limitmi prechádza **každý** request, bez ohľadu na ďalšie gate-y.
+
+### Per API token (Bearer JWT)
+
+Pre prihláseného používateľa:
+
+| Scope | Limit |
+|---|---|
+| Read operations (registry.read) | 1000 / minútu |
+| Write operations (registry.write) | 60 / minútu |
+| Activity create | 30 / minútu |
+| Comment create | 10 / minútu |
+| Message send (Courier) | 60 / minútu |
+| Search queries | 30 / minútu |
+| Data export | 1 / hodinu |
+| Bulk operations | 5 / hodinu |
+
+### Per tenant (organizácia)
+
+Aggregovane všetci používatelia tenanta dohromady:
+
+| Scope | Limit (default) |
+|---|---|
+| Total requests | 10000 / minútu |
+| Write operations | 1000 / minútu |
+| Search queries | 500 / minútu |
+| External webhook outbound | 100 / minútu |
+
+Veľké organizácie (zväzy, profesionálne kluby) môžu mať vyššie limity — nastavuje admin systému per `Organization.rateLimitTier`.
+
+### Per resource (špeciálne hot resources)
+
+Niektoré resources majú prísnejšie limity, ak by burst bol problematický:
+
+| Resource | Limit |
+|---|---|
+| `register_person` (registry-mcp) | 100 / hodinu / tenant |
+| `link_message_range_to_activity` (courier→activity) | 50 / hodinu / user |
+| `complete_mentoring_cycle` | 10 / deň / mentor |
+| `data-export` | 1 / hodinu / user, 100 / deň / tenant |
+
+## Tiers
+
+### Anonymous / unauthenticated
+
+Najprísnejšie limity. Cieľ: prevent scraping a DoS na verejných endpointoch (marketing, public broadcasts).
+
+### Authenticated user (default tier)
+
+Pre register-ovaných používateľov. Predvolené limity vyššie.
+
+### Premium tier
+
+Pre veľké organizácie alebo platených partnerov. **Konfigurovateľné** per organizácia, default 5x štandardné limity.
+
+### System tier
+
+Pre internú komunikáciu medzi MCP servermi. Limity sú nastavené tak, aby nikdy neboli problém pri normálnom load-e, ale chránia pred infinite loops.
+
+## Špecifické scenáre
+
+### Bulk import
+
+Pri initial backfill z sportup.sk projektu sa importujú stovky / tisíce záznamov. Štandardné write limity by to zablokovali.
+
+Riešenie: **dedicated bulk endpoint** s vlastným rate limitom (napríklad 10000 záznamov / hodinu). Vyžaduje špeciálny scope `registry.bulk` (len admin).
+
+### Hromadné notifikácie
+
+Klubový broadcast pre 500 fanúšikov vygeneruje 500 individuálnych notifikácií. Toto **netreba** limitovať per recipient — je to jeden authoring akt.
+
+Riešenie: rate limit sa kontroluje **per source** (broadcast send 1× count v limit), nie per recipient.
+
+### Real-time SSE
+
+SSE pripojenie nemá *count* request rate limit (je to long-lived). Namiesto toho:
+
+- Limit aktívnych connections per token (default 10)
+- Limit aktívnych connections per IP (default 100)
+- Limit total connections per node (5000)
+
+### AI agent / MCP klient
+
+AI agent volajúci MCP tools cez automatizáciu môže ľahko prekročiť limity. Riešenie:
+
+- Špeciálny scope `mcp.ai_agent` so striktnejšími limitmi (pre safety)
+- Powered konvenice — klient explicitne deklaruje zámery
+- Audit log všetkých tool volaní s `actor_type: 'ai_agent'`
+
+## Klient handling
+
+### Detekcia rate limit
+
+Klient kontroluje `X-RateLimit-Remaining`. Pri klesaní pod 10% by mal proaktívne spomaliť.
+
+Pri 429:
+
+```typescript
+async function makeRequest() {
+  const response = await fetch(url, { headers });
+
+  if (response.status === 429) {
+    const retryAfter = parseInt(response.headers.get('Retry-After') ?? '60');
+    await sleep(retryAfter * 1000);
+    return makeRequest();  // exponential backoff in production
+  }
+
+  return response;
+}
+```
+
+### Backoff stratégia
+
+**Exponential backoff with jitter** je odporúčaný:
+
+```typescript
+function calculateBackoff(attempt: number, baseMs = 1000): number {
+  const exponential = baseMs * Math.pow(2, attempt);
+  const jitter = exponential * Math.random() * 0.5;
+  return Math.min(exponential + jitter, 60000);  // cap 60s
+}
+```
+
+### UI patterns
+
+V activity.sportup.sk:
+
+- Pri rate limit zobrazíme **friendly toast** *"Príliš veľa požiadaviek, skúste o {N} sekúnd"*
+- Akčné tlačidlá počas backoff sú **disabled** s loadingom
+- Pri opakovanom rate limit sa zobrazí *"Niečo sa zdá byť divné — máš zapnutý nejaký iný klient?"*
+
+## Per scope prehľad
+
+```
+                      Read    Write   Mutate   Bulk
+                      ─────   ─────   ──────   ─────
+registry-mcp (tenant)  10k/m   1k/m    100/h    10k/h*
+activity-mcp          1k/m    60/m    30/m     500/h*
+courier-mcp           1k/m    100/m   60/m     —
+auth.activity.sportup.sk       —       30/m    5/m      —
+
+* Bulk len pre admin tier
+```
+
+## Whitelisting
+
+V niektorých prípadoch je vhodný **bypass** rate limitov:
+
+- Internal services (MCP-to-MCP komunikácia) — cez service tokens
+- Health checks — endpoint `/health` má vlastnú whitelist
+- Admin emergency operations — admin token s `bypass_rate_limits` scope (audit logged)
+
+Žiadne whitelisty nie sú **automatické** — všetky vyžadujú explicit konfiguráciu a logovanie.
+
+## Audit a monitoring
+
+### Metriky
+
+V Grafana dashboarde:
+
+- Rate limit hits per service (volume + percentage)
+- Top rate-limited tokens (možný attack alebo bug v kliente)
+- Rate limit budget per tenant (% využitia)
+
+### Alerty
+
+| Trigger | Severity |
+|---|---|
+| Single token > 100 rate limit hits / hour | Medium (možný bug v kliente) |
+| Tenant > 80% of total budget for 30+ minutes | Medium (zvážiť tier upgrade) |
+| Anonymný IP > 1000 rate limit hits / hour | High (možný attack) |
+| Rate limit infrastructure (Redis) failure | Critical |
+
+### Audit
+
+Každý rate limit hit ide do `auditLog` (compact form):
+
+```typescript
+{
+  action: 'rate_limited',
+  resource: 'mcp.tool.send_message',
+  personId: <user>,
+  tenantId,
+  timestamp,
+  // No PII, just operational data
+}
+```
+
+## Otvorené otázky
+
+1. **Kvóta-based pricing pre integrátorov** — ak v budúcnosti otvoríme API tretím stranám, potrebujeme pricing tier-y so zodpovedajúcimi limitmi.
+
+2. **Adaptívne limity** — namiesto fixných limitov adaptívne podľa systémovej záťaže. Dobré pre stability, komplexnejšie pre klientov.
+
+3. **Per-feature limits** — niektoré features (napr. AI generovanie obsahu) môžu mať vlastné limity nezávislé od scope-u. TBD pri pridávaní AI features.
+
+4. **Cooldowns pre podozrivé správanie** — pri detekovaní bot-like patterns dlhšie cooldowns ako bežné rate limit. TBD security feature.
+
+## Nasleduje
+
+Pre deployment pokračuj v [deployment](deployment).
+Pre database migrations pokračuj v [migrations](migrations).
+Pre Atlas Search pokračuj v [atlas-search](atlas-search).

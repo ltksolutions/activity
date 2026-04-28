@@ -1,0 +1,338 @@
+# Workflow — Tréner
+
+Tento dokument popisuje životný cyklus trénera v systéme — od získania licencie cez aktívnu prácu so športovcami a tímom, až po administrátorské povinnosti voči klubu.
+
+## Životný cyklus
+
+```
+Vzdelávanie a získanie licencie
+    │
+    ▼
+Členstvo v klube (OrganizationMember s role: 'coach')
+    │
+    ├──► Plánovanie tréningov (Training aktivity)
+    │
+    ├──► Vedenie tímu (Group conversation v Courier)
+    │
+    ├──► Komunikácia s rodičmi (Direct conversations)
+    │
+    ├──► Hodnotenie športovcov (athlete_evaluation aktivity)
+    │
+    └──► Postup licencie (kontinuálne vzdelávanie, kredity)
+
+       Možné stavy: Pause, Suspended (disciplinárne), Cross-club coaching
+
+       Ukončenie: Retirement, expiry licencie, prestup do funkcionára
+```
+
+## Licencia trénera
+
+Slovenský zákon o športe rozlišuje úrovne trénerských licencií:
+
+| Trieda | Úroveň |
+|---|---|
+| **IV** | Tréner mládeže (najnižšia) |
+| **III** | Klubový tréner |
+| **II** | Profesionálny tréner |
+| **I** | Tréner reprezentácie / vrcholového športu |
+| **UEFA Pro / Master** (futbal) | Medzinárodné súťaže |
+
+Detail v `License` entite — viď [../02-domain-model](/domain-model).
+
+### Získanie licencie
+
+1. Tréner sa prihlási do vzdelávacieho kurzu (organizovaného zväzom alebo akreditovanou inštitúciou)
+2. Účastní sa kurzov (`EducationEvent` aktivity)
+3. Po splnení požiadaviek a zložení skúšky dostane `License`
+4. Náš systém zaznamená cez `issue_license(...)` v registry-mcp
+
+### Predĺženie licencie
+
+Licencie majú obmedzenú platnosť (typicky 3-5 rokov). Pre predĺženie musí tréner mať dostatok **kreditov z kontinuálneho vzdelávania**:
+
+```
+License {
+  creditsRequired: 50,  // za životnost licencie
+  creditsEarned: 23,    // aktuálne
+}
+```
+
+Krediti sa pridávajú za:
+- Účasť na seminároch a workshopoch
+- Publikačná činnosť
+- Lektorovanie pre mladších kolegov
+- Účasť na medzinárodných konferenciách
+
+Pred expiráciou systém pošle notifikácie *"Tvoja licencia vyprší o 60 / 30 / 7 dní"*.
+
+## Hlavné aktivity
+
+### `training` — Tréning
+
+Tréner zaznamenáva tréning, ktorý vedie:
+
+```
+Training {
+  trainingType: 'team' | 'individual' | 'small_group',
+  occurredAt, durationMinutes,
+  participantPersonIds: [...],  // hráči, ktorí sa zúčastnili
+  recordedByPersonId: <coach>,
+  drills: [...],
+  attendance: { athleteId: 'present' | 'absent' | 'late' },
+  intensity, location,
+}
+```
+
+Pre **individuálny tréningový plán** môže tréner vytvoriť `TrainingPlan` (separátna entita, dlhodobý kontainer pre série tréningov).
+
+### `match_participation` — Tréner pri zápase
+
+Tréner je tiež účastníkom zápasu (rola `coach` alebo `head_coach`):
+
+```
+MatchParticipation {
+  matchId,
+  role: 'head_coach' | 'assistant_coach',
+  occurredAt, durationMinutes,
+  decisionsLog: [...],  // striedanie, taktické zmeny
+}
+```
+
+### `athlete_evaluation` — Hodnotenie športovca
+
+Pravidelné hodnotenia trénerom:
+
+```
+AthleteEvaluation {
+  evaluatedPersonId: <athlete>,
+  evaluatorPersonId: <coach>,
+  occurredAt,
+  scores: { technical, tactical, physical, mental, attitude },  // sport-specific
+  notes: <text>,
+  recommendation: 'continue' | 'promote' | 'concern',
+}
+```
+
+ACL: hodnotenie vidí athlete, rodič maloletého, klubový manažment. Detaily v [../acl/matrix-comments](/acl/matrix-comments).
+
+### `education_event` — Kontinuálne vzdelávanie
+
+```
+EducationEvent {
+  educationType: 'seminar' | 'conference' | 'lecturing',
+  participantPersonIds: [coach],
+  creditsEarned: int,
+  organizingOrgId,
+}
+```
+
+## Komunikácia trénera
+
+### S tímom
+
+Tímová `group` konverzácia v Courier:
+
+- Tréner ako admin
+- Asistenti trénera ako členovia
+- Hráči (alebo proxy-rodičia) ako členovia
+- Klubový manažér ako observer (audit)
+
+Príklady správ:
+- *"Zajtra tréning posunutý na 17:00"*
+- *"Zápas v sobotu — sústredenie 8:00 v klubovni"*
+- *"Pripomienka na lekárske prehliadky"*
+
+### S jednotlivými hráčmi
+
+`direct` konverzácia:
+
+- Pre dospelých hráčov: tréner ↔ hráč
+- Pre maloletých: tréner ↔ rodič-proxy
+
+Príklady:
+- Detaily zranenia
+- Personálny rozvojový plán
+- Rezolúcia konfliktov
+
+### S rodičmi
+
+`direct` konverzácia tréner ↔ rodič (ak nie je tréner aj proxy-rodič):
+
+- Otázky o pokroku dieťaťa
+- Logistika (výjazdy, pomôcky)
+- Zdravotné info
+
+### S klubom
+
+`group` konverzácia realizačného tímu:
+
+- Tréneri klubu
+- Klubový manažér
+- Klubový lekár / fyzio
+- Atléti / hráčov diskutujú v separátnych skupinách
+
+## Plánovanie tréningov
+
+Pre opakovaný plánovaný tréning (napr. pondelok/streda/piatok 17:00) systém ponúka:
+
+- **Šablóny tréningov** (`TrainingTemplate`)
+- **Sezónny plán** (cyklický rozvrh)
+- **Mikrocyklus** (týždenný plán)
+- **Makrocyklus** (mesačný/sezónny plán)
+
+Toto sú TBD pre MVP — momentálne stačí ad-hoc vytváranie `Training` aktivít. Šablóny a plány prídu v ďalšej iterácii.
+
+## Hodnotenie a rozvoj športovcov
+
+### Periodické hodnotenia
+
+Tréner robí pravidelne (per sezóna alebo per polrok) štruktúrované hodnotenia každého hráča:
+
+- Štruktúra závisí od športu (sport-specific schéma scores)
+- Ukladá sa ako `AthleteEvaluation` aktivita
+- Komentáre pod hodnotením umožňujú diskusiu so športovcom (a rodičom)
+
+### Rozvojové plány
+
+Pre talentovaných alebo problémových športovcov tréner vytvára individuálny rozvojový plán. Implementačne `Document` typu `development_plan` (TBD pre budúcu iteráciu).
+
+## Špeciálne scenáre
+
+### Cross-club coaching
+
+Tréner môže mať `OrganizationMember` v dvoch kluboch súčasne — napríklad mládežnícky tréner v jednom klube a asistent v druhom. UI musí podporiť multi-tenant prepínanie.
+
+### Coaching reprezentácie
+
+Reprezentačný tréner je nový `OrganizationMember` v zväzu s `role: 'national_coach'`. Aktivity reprezentácie sa zaznamenávajú v scope zväzu, nie klubu.
+
+### Tréner aj rodič v jednom
+
+Tréner U13, ktorý má vlastné dieťa v U13 tíme, má **dve roly v rovnakej organizácii**:
+
+- `OrganizationMember(role: 'coach')`
+- `OrganizationMember(role: 'parent')` (cez ParentalAccess)
+
+UI rozlišuje kontext — pri viewovaní tímu vidí ako tréner (plný pohľad), pri komunikácii s ostatnými rodičmi vystupuje cez proxy svojho dieťaťa.
+
+### Pause trénera
+
+Tréner sa rozhodne na obdobie nečinnosť:
+
+- `OrganizationMember.endedAt: <date>` voliteľne, alebo `Person.activityStatus: 'paused'`
+- License zostáva aktívna, ak je platná
+
+### Disciplinárna suspenze
+
+Pri závažnom porušení (verbálne útoky, nevhodné správanie):
+
+- `License.status: 'suspended'`
+- Audit log v `auditLog`
+- Zákaz vedenia tréningov
+
+## Postup v kariére
+
+Tréner môže postupovať:
+
+1. **Vyššou licenciou** — predĺženie kreditmi, alebo preskočenie cez kurz
+2. **Vyšším postom** v klube — z asistenta na hlavného trénera
+3. **Veľkosťou klubu / úrovňou súťaže** — z mládežníckeho na profesionálny
+4. **Špecializáciou** — fitness coach, mental coach, položkový tréner (špecialista na obrancov, brankárov)
+5. **Funkcionárskou dráhou** — zo trénera na metodika, riaditeľa mládežníckej akadémie, predsedu komisie
+
+## Zdravotné a bezpečnostné povinnosti
+
+Tréner zodpovedá za bezpečnosť tímu počas tréningu a zápasu:
+
+- Sleduje zdravotný stav (cez `MedicalTreatment` notifikácie pre hráčov pod jeho vedením)
+- Zaznamenáva incidenty (zranenia, kolízie, nehody) cez `Incident` aktivitu (TBD)
+- Pri incidentoch okamžitá komunikácia s klubovým lekárom
+
+## Reporty a štatistiky
+
+### Pre trénera
+
+Dashboard:
+
+- Aktívne tímy
+- Najbližšie tréningy a zápasy
+- Pripravované hodnotenia
+- Nesplnené úlohy (komentáre, ošetrenia, vzdelávanie)
+- Aktuálny stav kreditov licencie
+
+### Pre klub
+
+- Aktívni tréneri per úroveň
+- Tréner ↔ tím vzťahy
+- Tréningová efektivita (počet tréningov × prítomnosť)
+- Disciplinárne záznamy
+
+### Pre zväz
+
+- Aktívni tréneri v krajine
+- Postup licencií
+- Geografická distribúcia
+- Vzdelávacie potreby
+
+## ACL pre trénera
+
+| Aktivita | Vlastný plán | Tréning iného trénera | Lekárske hráča | Hodnotenie iného trénera |
+|---|---|---|---|---|
+| `training` | R W E M | R | – | – |
+| `match_participation` | R | R | – | R |
+| `medical_treatment` | – (info pre koordináciu) | – | – | – |
+| `athlete_evaluation` | R W E M | – | – | – (vlastné iba) |
+| `education_event` (vlastné) | R W E | – | – | – |
+
+Detaily v [../acl/matrix-comments](/acl/matrix-comments).
+
+## UI obrazovky
+
+V skratke:
+
+### Dashboard trénera
+
+- Tímy pod jeho vedením
+- Najbližšie tréningy a zápasy
+- Pripravované hodnotenia (badge s počtom)
+- Nesplnené notifikácie
+- Stav kreditov licencie
+
+### Detail tímu
+
+- Hráči (avatar, vek, pozícia, status)
+- Najbližšie aktivity
+- Štatistiky tímu
+- Komunikačná lišta (otvoriť tímový Courier)
+
+### Plánovanie tréningu
+
+- Datepicker, čas, miesto
+- Selektor hráčov (s checkboxom účasti)
+- Drill builder (sport-specific)
+- Šablóny (TBD)
+
+## Notifikácie pre trénera
+
+| Udalosť | Notifikácia |
+|---|---|
+| Nominácia na zápas (klubom alebo zväzom) | email + push |
+| Nový hráč pridaný do tímu | email |
+| Hráč zranený (cez MedicalTreatment notifikáciu) | email + push (high priority) |
+| Komentár pod tréningovým plánom | email digest |
+| Pripomienka kontinuálneho vzdelávania | email |
+| Stav licencie (predĺženie, expiry warning) | email |
+
+## Otvorené otázky
+
+1. **Tréningové šablóny a sezónne plány** — momentálne TBD, dôležité pre produktivnu prácu trénera.
+
+2. **Drill builder** — interaktívny nástroj pre tvorbu tréningových cvičení s vizuáciou hracej plochy. Out-of-scope pre MVP.
+
+3. **Conflict resolution medzi trénermi** — keď viacero trénerov má prístup k tomu istému hráčovi (klub vs. reprezentácia), výmena informácií je dôležitá. Vyžaduje cross-org communication flow.
+
+## Nasleduje
+
+Pre rozhodcu pokračuj v [referee](referee).
+Pre lekára/fyzio pokračuj v [medical](medical).
+Pre podporné kategórie pokračuj v [fan](fan) a [supporter](supporter).

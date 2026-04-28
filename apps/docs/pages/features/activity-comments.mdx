@@ -1,0 +1,288 @@
+# Activity Comments
+
+Tento dokument popisuje **polymorfné komentáre** — generický komentárový subsystém, ktorý sa aplikuje pod hocijakú aktivitu v systéme. Bol navrhnutý explicitne ako jeden subsystém, nie ako paralelné implementácie pre každý typ aktivity zvlášť.
+
+## Filozofia: jedna implementácia pre všetky aktivity
+
+Komentáre sa v systéme objavujú pod rôznymi typmi aktivít:
+
+- **Mentoringové sedenie** — mentor, mentee, predseda komisie, externý mentor
+- **Lekárske ošetrenie** — lekár, fyzio, klubový lekár, samotný športovec, rodič maloletého
+- **Tréningový plán** — tréner, športovec, rodič maloletého
+- **Hodnotenie zo zápasu** — delegát, rozhodca, predseda komisie
+- **Výživový plán** — nutricionista, športovec, tréner (s povolením)
+- **Hodnotenie športovca trénerom** — tréner, športovec, rodič maloletého
+- **Antidopingový záznam** — športovec, antidoping officer, rodič maloletého
+
+Bez generického prístupu by sme mali sedem paralelných implementácií diskusie, každá s vlastnou logikou autorizácie, mazania, vlákien, audit logu. To je nepríjemné z hľadiska údržby a hlavne **nebezpečné** — desať miest, kde sa môže autorizácia napísať zle.
+
+Preto: **jedna collection `activityComment`** s polymorfnou väzbou cez `(activityType, activityId)`, **jedny ACL pravidlá** parametrizované per typ aktivity.
+
+## Schéma
+
+```typescript
+const ActivityCommentSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  activityType: z.string(),       // "mentoring_session", "medical_treatment", ...
+  activityId: z.instanceof(ObjectId),
+  authorPersonId: z.instanceof(ObjectId),
+  body: z.string().min(1).max(10000),
+  parentCommentId: z.instanceof(ObjectId).optional(),  // max 1 úroveň zanorenia
+  editedAt: z.date().optional(),
+  createdAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+```
+
+Indexy:
+
+```javascript
+db.activityComment.createIndex({ tenantId: 1, activityType: 1, activityId: 1, createdAt: 1 })
+db.activityComment.createIndex({ tenantId: 1, authorPersonId: 1, createdAt: -1 })
+```
+
+Vidno z indexu, že primárny prípad je *"daj všetky komentáre pod konkrétnou aktivitou v chronologickom poradí"*. Druhotný *"daj všetky komentáre tejto osoby"* (pre profilový pohľad alebo audit).
+
+## Polymorfizmus — čo to znamená v praxi
+
+### Bez referenčnej integrity v DB
+
+MongoDB neumie cross-collection foreign keys. To znamená, že DB **nezaručuje**, že `activityId` skutočne existuje v collection zodpovedajúcej `activityType`. Pri pokuse pridať komentár sa kontroluje v aplikačnej vrstve:
+
+```typescript
+class ActivityCommentService {
+  async add(input: AddCommentInput, currentUserId: ObjectId): Promise<ActivityComment> {
+    // 1. Overí existenciu aktivity
+    const exists = await this.activityRegistry.exists(input.activityType, input.activityId);
+    if (!exists) throw new NotFoundError('ACTIVITY_NOT_FOUND');
+
+    // 2. Overí ACL — môže táto osoba komentovať pod takto typu aktivity?
+    const acl = aclRulesFor(input.activityType);
+    const can = await acl.canWrite(currentUserId, input.activityType, input.activityId);
+    if (!can) throw new ForbiddenError('FORBIDDEN');
+
+    // 3. Pre vlákna overí, že parent_comment_id je v tej istej aktivite
+    if (input.parentCommentId) {
+      const parent = await this.repo.findById(input.parentCommentId);
+      if (!parent || parent.activityType !== input.activityType ||
+          !parent.activityId.equals(input.activityId)) {
+        throw new ValidationError('INVALID_PARENT_COMMENT');
+      }
+    }
+
+    // 4. Vloží komentár
+    return this.repo.create({ ...input, authorPersonId: currentUserId, ... });
+  }
+}
+```
+
+### Activity Registry
+
+`activityRegistry` je tenký servis, ktorý vie pre daný `activityType` overiť existenciu dokumentu. Implementačne mapa:
+
+```typescript
+const ACTIVITY_REGISTRY: Record<string, ActivityHandler> = {
+  'mentoring_session': {
+    collection: 'mentoringSession',
+    aclRules: mentoringSessionAcl,
+  },
+  'medical_treatment': {
+    collection: 'medicalTreatment',
+    aclRules: medicalTreatmentAcl,
+  },
+  'training': { collection: 'training', aclRules: trainingAcl },
+  // ...
+};
+```
+
+Pri pridaní nového typu aktivity sa pridá záznam tu, žiadna ďalšia zmena v komentárovom subsystéme nepotrebná.
+
+## ACL parametrizovaná per typ aktivity
+
+Konečné ACL pravidlá závisia od typu aktivity. Niekoľko ilustračných príkladov:
+
+### Komentáre pod **mentoring_session**
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Mentor cyklu | ✓ | ✓ | ✓ | – |
+| Mentee cyklu | ✓ | ✓ | ✓ | – |
+| Externý mentor (priradený) | ✓ | ✓ | ✓ | – |
+| Predseda komisie rozhodcov | ✓ | – | – | – |
+| Admin organizácie | ✓ | – | – | ✓ |
+
+### Komentáre pod **medical_treatment**
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Lekár — autor záznamu | ✓ | ✓ | ✓ | – |
+| Klubový lekár | ✓ | ✓ | ✓ | – |
+| Fyzio (s prepojeným ošetrením) | ✓ | ✓ | ✓ | – |
+| Športovec — subjekt záznamu | ✓ | ✓ | ✓ | – |
+| Rodič maloletého | ✓ | ✓ | ✓ | – |
+| Tréner | – | – | – | – |
+| Admin organizácie | ✓ (audit) | – | – | ✓ |
+
+### Komentáre pod **training**
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Tréner — autor plánu | ✓ | ✓ | ✓ | ✓ |
+| Športovec — subjekt | ✓ | ✓ | ✓ | – |
+| Rodič maloletého | ✓ | ✓ | – | – |
+| Admin organizácie | ✓ | – | – | ✓ |
+
+Operácie:
+- **R** — čítať
+- **W** — písať vlastný komentár
+- **E** — editovať / mazať vlastný komentár
+- **M** — moderovať (mazať cudzie, banovať autorov)
+
+Kompletná ACL matrix pre všetky typy aktivít je v [../acl/matrix-comments](/acl/matrix-comments).
+
+## Vlákna
+
+Komentáre podporujú **jednu úroveň zanorenia** cez `parentCommentId`. To znamená:
+
+- *"Top-level"* komentár — `parentCommentId: null`
+- *"Reply"* komentár — `parentCommentId: <ID top-level komentára>`
+
+Reply na reply nie je povolené. Ak by niekto chcel diskusiu väčšej hĺbky, je to zvyčajne signál, že téma si zaslúži vlastné sedenie alebo separátne miesto.
+
+UI to rieši takto:
+
+```
+└── Komentár 1 (top-level)
+    ├── Reply 1.1
+    └── Reply 1.2
+└── Komentár 2 (top-level)
+    └── Reply 2.1
+```
+
+Žiadne *"Reply 1.1.1"* a hlbšie.
+
+## Editácia a mazanie
+
+### Vlastné komentáre
+
+Autor smie **editovať** alebo **zmazať** svoj vlastný komentár kedykoľvek. Pri editácii sa nastaví `editedAt` timestamp, UI to zobrazuje ako *"upravené pred X minútami"*. Pôvodný text sa **neukladá** (rozhodnutie pre privacy a jednoduchosť).
+
+### Mazanie a soft-delete
+
+Mazanie je **soft-delete** — `deletedAt` nastaví aplikačná vrstva. UI zobrazuje:
+
+> *Tento komentár bol odstránený autorom.*
+
+Pôvodný text v DB **zostáva**, len je skrytý pre čítateľov (s výnimkou audit-only role).
+
+Toto rozhodnutie:
+- Účastníci diskusie vidia, že tam *niečo bolo*, len nie čo
+- Audit log zostáva kompletný
+- Pri možných právnych otázkach (urážka, ohováranie) je obsah dostupný cez `auditLog` dotaz
+
+### Cudzie komentáre
+
+Moderátor (rola **M**) smie zmazať cudzí komentár. UI zobrazuje:
+
+> *Tento komentár bol odstránený moderátorom.*
+
+Voliteľne s dôvodom (admin pri mazaní môže zadať `reason`, ktorý sa zaloguje a voliteľne zobrazí).
+
+## Notifikácie
+
+### Default
+
+Účastníci aktivity dostávajú notifikáciu pri **každom novom komentári pod aktivitou** (email + push). Príklady:
+
+- Nový komentár pod mentoringovým sedením → mentor + mentee + externí mentori (ak priradení)
+- Nový komentár pod lekárskym ošetrením → autor + subjekt + klubový lekár + rodič maloletého
+
+Nie je to notifikácia *"komentár o tebe"* — je to notifikácia *"v aktivite, kde si účastník, je nová diskusia"*.
+
+### Mentions
+
+Komentár môže obsahovať mention:
+
+```markdown
+@petr.kralovic ako vidíš túto situáciu?
+```
+
+V takom prípade dostane Peter Kralovič **dodatočnú** notifikáciu (s vyšším priority skóre v inbox-e), bez ohľadu na to, či je účastníkom aktivity. Mention spustí ACL kontrolu — ak Peter nemá `R` na danú aktivitu, mention je *neúčinný* (mentioned osoba nedostane nič, autor dostane nenápadný hint *"používateľ nemá prístup"*).
+
+## Vzťah k Courier
+
+Komentáre **nie sú** chat. Sú to *post-hoc diskusie* pod konkrétnym záznamom (sedenie, ošetrenie, tréning). Keď chcú mentor a mentee viesť priebežnú konverzáciu, použijú Courier, nie komentáre.
+
+Rozdiel:
+
+| Komentáre pod aktivitou | Courier konverzácia |
+|---|---|
+| Viažu sa k *záznamu* (sedenie, ošetrenie, ...) | Žije nezávisle |
+| Žijú dovtedy, kým aktivita žije | Žije, kým ju účastníci nezatvoria |
+| Notifikácia raz pri komentári | Notifikácia per správa, kanály per-konverzácia |
+| Žiadne real-time delivery | Real-time SSE delivery |
+| Plné štruktúrované záznamy | Voľne tečúca konverzácia |
+
+Most medzi nimi: funkcia *"vytvoriť aktivitu z týchto Courier správ"* (viď [courier](courier) a [mentoring](mentoring)).
+
+## Search
+
+Komentáre budú indexované v Atlas Search:
+
+- pole: `body`, `authorPersonId`, `activityType`, `activityId`
+- ACL gate sa aplikuje **až po** search-i — search vráti relevantné dokumenty, autorizačná vrstva odfiltruje tie, ku ktorým aktuálny user nemá prístup
+- pre user-friendly highlighting Atlas Search vie ponúkne fragments
+
+Use case: mentor v aplikácii hľadá *"ofsajd"*, dostane zoznam svojich sedení, lekárskych konzultácií, hodnotení, kde sa téma riešila, vrátane diskusií v komentároch.
+
+## Implementačné body
+
+### Stack
+
+```
+Fastify + MCP SDK
+Native MongoDB driver
+Zod schémy (zdielané s frontendom)
+Atlas Search index (configured per environment)
+Redis pre rate limiting (max 10 komentárov / minútu / user)
+```
+
+### Štruktúra v activity-mcp
+
+```
+activity-mcp/
+├── src/
+│   ├── activities/                # per typ aktivity (training, medicalTreatment, ...)
+│   │   ├── ActivityRegistry.ts    # mapa activityType → handler
+│   │   └── ...
+│   ├── comments/
+│   │   ├── ActivityCommentService.ts
+│   │   ├── ActivityCommentRepository.ts
+│   │   ├── tools.ts               # MCP tools
+│   │   └── resources.ts           # MCP resources
+│   └── ...
+```
+
+### Race conditions
+
+Pri masívnej diskusii môže nastať, že dvaja používatelia odpovedajú súčasne na ten istý komentár. Žiadny problém — `parentCommentId` je len odkaz, multiple replies sú v poriadku. Optimistic concurrency je dostatočné.
+
+### Spam prevention
+
+- Rate limit: 10 komentárov / minútu / user / aktivita
+- Min dĺžka 1 znak, max 10 000
+- Server-side filter: detekuje opakované rovnaké správy do tej istej aktivity (občasné F5 problémy klienta)
+
+## Otvorené otázky
+
+1. **Reactions** — emoji "thumbs up" pod komentár. Schéma to vie podporiť cez separátnu collection `commentReaction`. Pre MVP odložené.
+2. **Pinning** — pripnutie dôležitého komentára na vrch zoznamu (admin/moderátor). Dobré pre dlhé diskusie. Pre MVP odložené.
+3. **Mentions s navrhovaním** — autocomplete pri písaní `@`. Vyžaduje search v `Person` collection scoped na ACL gate aktivity. Pre MVP basic verziu (typovať username, server validuje).
+4. **Encrypted komentáre** — komentáre pod citlivými aktivitami (lekárske) sú momentálne plain-textové na serveri (s ACL gate). Diskusia o E2E pre komentáre v lekárskom kontexte by sa mohla viesť, ale komplikuje moderation a audit.
+
+## Nasleduje
+
+Pre rodičovský proxy model pokračuj v [parental-proxy](parental-proxy).
+Pre ACL matice pokračuj v [../acl/matrix-comments](/acl/matrix-comments).

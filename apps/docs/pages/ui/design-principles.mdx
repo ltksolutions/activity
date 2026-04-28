@@ -1,0 +1,431 @@
+# Dizajnové princípy
+
+Tento dokument popisuje **dizajnové princípy** aplikácie — ako uvažujeme o UI, čo považujeme za dôležité, čomu sa vyhýbame. Slúži ako kompas pre vývojárov, dizajnérov aj produktových ľudí pri rozhodovaniach o detailoch implementácie.
+
+## Východiská
+
+Systém slúži veľmi rôznorodej populácii:
+
+- 50-roční rozhodcovia, ktorí pri písaní mentoringového sedenia hľadajú jasnosť a štruktúru
+- 12-roční hráči, ktorým rodič posiela tímové oznámenia
+- Profesionálni športovci, ktorí chcú rýchlo zaznamenať tréning na mobile
+- Kluboví manažéri, ktorí spravujú stovky členov
+- Sponzori a podporovatelia, ktorí raz za rok kontrolujú stav darovaného
+
+Žiadny "typický užívateľ". To je východisko pre všetky dizajnové rozhodnutia.
+
+## Princípy
+
+### 1. Jasnosť pred krásou
+
+Aplikácia spravuje **citlivé dáta** a **dôležité kariérne rozhodnutia**. Pri pochybnostiach voľíme jasné nad vizuálne pôsobivé.
+
+V praxi:
+
+- Štítky sú **konkrétne** (*"Záverečné hodnotenie cyklu"*, nie *"Hodnotenie"*)
+- Tlačidlá hovoria o **akcii** (*"Uložiť ako Recorded"*, nie *"Hotovo"*)
+- Stavy sú **zviditeľnené** (Draft, Proposed, Recorded majú výrazné štítky)
+- Nepokúšame sa o módne micro-animácie, ktoré rušia
+
+### 2. Dôveryhodnosť cez transparentnosť
+
+Užívateľ **vždy vie**, čo sa deje, kto čo vidí, čo sa s dátami robí.
+
+V praxi:
+
+- Pri vyplnení mentoringového sedenia: hint *"Po uložení sa mentee notifikuje. Editácia bude možná 24 h."*
+- Pri odoslaní E2E správy: ikona zámky, tooltip *"Šifrované, len ty a {meno} čítate"*
+- Pri prístupe rodiča do detskej konverzácie: dieťa vidí *"Rodič číta tieto konverzácie"*
+- Pri AI-generated odporúčaní: *"AI suggestion — over si pred použitím"*
+
+### 3. Miernosť pri pridávaní
+
+Featurový shopping list je veľký. Princíp: **každý feature musí ospravedlniť svoju existenciu**.
+
+V praxi:
+
+- MVP nemá pinning, threading, reactions — pridáme len keď zistíme, že chýbajú
+- Žiadne "len tak" notifikácie — len pri akcii relevantnej pre používateľa
+- Žiadne pop-up onboardingy, gamification, tutoriály — práca s aplikáciou musí byť **zrejmá**
+
+### 4. Mobil-first pri spotrebe, desktop-first pri produkcii
+
+Užívatelia konzumujú obsah primárne na mobile (notifikácie, chat, rýchle pohľady), ale produkujú obsah najmä na desktope (vyplniť mentoringové sedenie, hodnotenie zo zápasu).
+
+V praxi:
+
+- Mobile UI: list view, timeline, chat, quick actions
+- Desktop UI: complex forms, multi-column layouts, batch operations
+- Responzívne breakpoints: mobile (do 768px), tablet (768-1024), desktop (1024+)
+
+### 5. Jeden zdroj pravdy v UI
+
+Aktivita / konverzácia / cyklus má **jedno kanonické miesto**, kde žije. Inde sú len odkazy.
+
+V praxi:
+
+- *Detail mentoringového sedenia* je hlavné miesto, všade inde sú odkazy
+- *Detail konverzácie* — všetky správy živia tu, žiadne duplikáty v inboxe
+- Pri prepojení (sedenie ↔ chat range) — zobrazíme **embed** s linkom, nie kópiu
+
+### 6. Postupné odhaľovanie
+
+Komplexné formuláre **nezahltíme** všetkým naraz. Jednoduchá nadradená vrstva, detaily sa odhaľujú postupne.
+
+V praxi:
+
+- Mentoring sedenie má sekcie 1-5, niektoré collapsed by default
+- Voliteľné polia (`nextSteps`, externé linky, prílohy) sa rozšíria pri kliknutí *"Pridať"*
+- Pokročilé nastavenia konverzácie sú v *"Viac"* dropdown
+
+### 7. Bezpečnosť ako default
+
+Pri pochybnosti **chrániť**. Nikdy "for convenience" otvoriť.
+
+V praxi:
+
+- Nové direct chaty od neznámych sú **zatvorené** pre väčšinu profesionálov
+- Citlivé záznamy (lekárske) **nie sú** v search-i pre nezáväzných užívateľov
+- E2E je **default** pre 1:1 chat
+- Audit log pri každom prístupe k citlivým dátam
+
+### 8. Accessibility ako must-have
+
+Aplikácia musí byť použiteľná pre ľudí s rôznymi schopnosťami.
+
+V praxi:
+
+- WCAG 2.1 Level AA compliance
+- Keyboard navigation pre všetky operácie
+- Screen reader support (ARIA labels, semantic HTML)
+- Color contrast aspoň 4.5:1
+- Žiadne výlučne color-coded info (vždy aj text/ikona)
+- Focus indicators viditeľné
+
+## Vizuálny systém
+
+### Typografia
+
+Pre web aplikáciu používame **dve fontové rodiny**:
+
+- **Headlines, navigation**: san-serif geometrický (napr. Inter, Manrope)
+- **Body text, forms**: san-serif humanistický (napr. Inter)
+
+V Nextra (docs.activity.sportup.sk) môže byť odlišný dizajn pre dokumentačné účely.
+
+Hierarchia veľkostí:
+
+```
+H1: 32px / 40px line-height
+H2: 24px / 32px
+H3: 20px / 28px
+H4: 18px / 24px
+Body: 16px / 24px
+Small: 14px / 20px
+Caption: 12px / 16px
+```
+
+### Farby
+
+Branding (logo, accent farby) sa preberá z **Design manuálu pre sportup.sk** projekt — viď [../README](/README) a Nextra setup.
+
+Sémantické farby:
+
+```
+Primary: brand color (z manuálu)
+Success: green (action complete, valid state)
+Warning: orange (editable for limited time, attention)
+Danger: red (destructive, error state)
+Info: blue (informational hint)
+
+Neutral 100: nearly white (backgrounds)
+Neutral 200: light gray (borders, dividers)
+Neutral 500: medium gray (icons, secondary text)
+Neutral 800: dark gray (body text)
+Neutral 950: nearly black (headlines)
+```
+
+Dark mode má samostatné odtiene, ale rovnakú sémantiku.
+
+### Grid a spacing
+
+Base unit: **4px**. Všetky paddingy, marginy, gap-y sú násobky 4.
+
+Common spacing:
+- 4, 8, 12, 16 — micro
+- 20, 24, 32 — small
+- 40, 48, 64 — medium
+- 80, 120 — large
+
+### Iconography
+
+Lucide ikony (open source, konzistentný štýl). Velikosti:
+
+- 16px — inline v texte
+- 20px — buttons, list items
+- 24px — primary actions
+- 32px — illustrations
+
+### Komponenty
+
+Knihovňa: **Radix UI** primitives + **Tailwind CSS** styling. Žiadny vlastný framework.
+
+Custom komponenty:
+
+- `Button` (primary, secondary, ghost, danger, sizes)
+- `Input` (text, email, number, password, with validation states)
+- `Select` (single, multi, search)
+- `Card` (for entity details)
+- `Tabs`, `Modal`, `Drawer`, `Toast`, `Tooltip`
+- `Avatar` (with proxy badge for parental representations)
+- `Badge` (status, role, count)
+- `Timeline` (vertical)
+
+Komponenty sú v zdielanom monorepo packagi `@activity/ui` — re-použité naprieč activity.sportup.sk, admin.activity.sportup.sk.
+
+## Vzory
+
+### Stavový badge
+
+Pre všetky stavy entít používame konzistentný *Badge* komponent:
+
+```
+●  Active
+○  Paused
+✓  Completed
+✕  Terminated
+⏳  Draft
+📝  Proposed
+✅  Recorded
+🚫  Rejected
+```
+
+Farba a ikonografia podľa sémantiky stavu.
+
+### Status warning
+
+Pre časovo obmedzené operácie (editačné okno mentoring sedenia):
+
+```
+┌────────────────────────────────────────────┐
+│ ⚠️  Editovateľné ešte 18:32:14              │
+└────────────────────────────────────────────┘
+```
+
+Žltá farba, prominent v hlavičke detailu.
+
+### Empty state
+
+Vždy s návrhom akcie:
+
+```
+       📭
+   Žiadne sedenia
+   Začni vyplnením prvého mentoringového sedenia.
+   [+ Vytvoriť sedenie]
+```
+
+Nikdy len *"Empty"* alebo *"Nothing here"*.
+
+### Loading state
+
+Skeleton loading namiesto spinner-ov pre obsah, ktorý vie odhadnúť shape:
+
+```
+████████████  ▒▒▒▒▒▒
+████████████  ▒▒▒▒▒▒
+████  ▒▒▒▒▒▒▒▒▒▒▒
+```
+
+Spinner len pre tlačidlá a inline akcie.
+
+### Error state
+
+Konkrétny dôvod + návrh akcie:
+
+```
+❌ Nepodarilo sa uložiť sedenie
+   Editačné okno (24h) vypršalo. Kontaktuj admin
+   organizácie ak treba úpravu.
+   [OK]   [Kontakt]
+```
+
+Žiadne *"Error 500"* alebo *"Something went wrong"*.
+
+### Sensitivity warning
+
+Pre privátne sekcie (mentor private note, lekárske záznamy):
+
+```
+┌────────────────────────────────────────┐
+│ 🔒 SÚKROMNÁ POZNÁMKA — mentee NEVIDÍ   │
+│                                         │
+│ Tu môžeš zapísať pozorovania len pre   │
+│ seba. Mentee nikdy neuvidí, čo si      │
+│ napísal.                                │
+└────────────────────────────────────────┘
+```
+
+Šedé pozadie, výrazná hlavička, jasný popis dopadu.
+
+## Mobile patterns
+
+### Bottom navigation
+
+Pre primárne sekcie (Domov, Aktivity, Chat, Profil):
+
+```
+┌────────────────────────────────────────┐
+│              CONTENT                   │
+│                                         │
+│                                         │
+├────────────────────────────────────────┤
+│  [🏠]    [📋]    [💬]    [👤]         │
+│  Domov  Aktivity Chat   Profil        │
+└────────────────────────────────────────┘
+```
+
+### Card list
+
+Pre timeline aktivít, konverzácií:
+
+```
+┌────────────────────────────────────────┐
+│ ●  Mentoringové sedenie · 12:30        │
+│    Mentor Peter Novák · 60 min         │
+│    "Rozbor situácií zo zápasu..."      │
+├────────────────────────────────────────┤
+│ ◐  Tréning · ráno                       │
+│    Kondičný · 90 min · Intenzita 7/10  │
+└────────────────────────────────────────┘
+```
+
+### Pull-to-refresh
+
+Štandardný iOS / Android pattern.
+
+### Swipe actions
+
+V chat zoznamoch:
+
+- Swipe doľava → Archive
+- Swipe doprava → Mark as read
+
+V aktivity timeline:
+
+- Swipe doľava → quick actions menu (komentár, zdielať, ...)
+
+## Privacy patterns
+
+### Proxy badge
+
+Keď je rodič zástupcom dieťaťa v chate, jeho avatar má **proxy badge**:
+
+```
+┌─────┐
+│ 🟦  │  Peter Novák (rodič Adamka)
+└─────┘
+```
+
+Ikonka rodičovstva (mladá tvár inside) je univerzálne pochopiteľná.
+
+### Audit indicator
+
+Pri otvorení citlivého záznamu (medical, antidoping):
+
+```
+┌────────────────────────────────────────┐
+│ 🔍 Tento prístup sa loguje              │
+│    Otvorenie zaznamenáme v audit log.  │
+└────────────────────────────────────────┘
+```
+
+Užívateľ vie, že je sledovaný — to znižuje pokušenie zneužitia.
+
+### Consent prompts
+
+Pri akciách ovplyvňujúcich súkromie inej osoby:
+
+```
+"Pridáš mentee do skupinového chatu. Mentee bude
+notifikovaný a uvidí všetkých účastníkov.
+[Zrušiť] [Pridať]"
+```
+
+## Antipattern (čo NErobíme)
+
+### Dark patterns
+
+Žiadne triky na získanie súhlasov, nákupov, registrácií. Žiadne *"Súhlasiť"* default-checked.
+
+### Notification spam
+
+Žiadne notifikácie *"len pre angagement"*. Každá notifikácia musí byť relevantná pre danú akciu.
+
+### Hidden costs / time
+
+Pri každej akcii s nákladmi (čas, peniaze, viditeľnosť) — explicitné hint pred akciou.
+
+### Misleading metaphors
+
+Žiadne *"Save & continue later"* tlačidlá, ktoré v skutočnosti odošlú formulár. Tlačidlá robia to, čo hovoria.
+
+### "Look ma, an animation"
+
+Animácie len keď slúžia jasnému účelu (transition between states, draw attention to error). Žiadne ozdobné loaders.
+
+## Internacionalizácia
+
+### Texty
+
+Všetky user-facing texty sú v **i18n knižnici** (next-intl). Žiadne hardcoded strings v JSX.
+
+```typescript
+// Bad
+<button>Save</button>
+
+// Good
+<button>{t('common.save')}</button>
+```
+
+### Plurals
+
+Slovenský jazyk má 3 plurality (1, 2-4, 5+):
+
+```typescript
+t('activity.count', { count: 1 });   // "1 aktivita"
+t('activity.count', { count: 3 });   // "3 aktivity"
+t('activity.count', { count: 10 });  // "10 aktivít"
+```
+
+### Dátum a čas
+
+Lokálne formáty:
+- SK: `12. 4. 2026 13:30`
+- EN: `Apr 12, 2026 1:30 PM`
+- CS: `12. 4. 2026 13:30`
+
+### RTL preparedness
+
+Aktuálne len LTR jazyky. Layout je pripravený na RTL (logical CSS properties: `padding-inline-start` namiesto `padding-left`).
+
+## Versioning UI
+
+Veľké redizajn-y dostávajú minor version bump (1.x.0 → 1.y.0). Užívatelia majú **opt-in obdobie 2 týždne** pre prepnutie na nové UI pred force migration.
+
+Tooltipy *"Toto je novinka v X.Y.0"* po veľkých zmenách.
+
+## Otvorené otázky
+
+1. **AI asistent v UI** — chatbot v rohu? Inline AI suggestions? Plánujeme začať konzervatívne (suggestion v formulároch), expand later.
+
+2. **Personalizácia themes** — môže si admin organizácie nastaviť custom dark/light variant? Pre MVP **nie** (len logo a accent), v ďalších verziách možno.
+
+3. **Storytelling pre fanúšikov** — gamifikované career timeline pre športovca pre fanúšikov. Out-of-scope pre MVP.
+
+4. **Voice UI / dictation** — hlasové vyplnenie formulárov, najmä mentoring sedenia. Plánujeme ako future feature, vyžaduje doménový model rozpoznávania.
+
+## Nasleduje
+
+Pre konkrétne mockupy pokračuj v [mockups](mockups).
+Pre architektúru pokračuj v [../01-architecture](/architecture).

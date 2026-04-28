@@ -1,0 +1,366 @@
+# Workflow — Športovec
+
+Tento dokument popisuje životný cyklus športovca v systéme — od registrácie cez aktívnu kariéru rôznymi kategóriami, až po prechod do iných rolí. Športovec je **najpočetnejšia** používateľská kategória v systéme.
+
+## Životný cyklus
+
+```
+Registrácia (samostatná alebo cez klub)
+    │
+    ▼
+Členstvo v klube ──── získa OrganizationMember(role: 'athlete')
+    │
+    ├──► Detský šport (do `minorSelfJoinAge`) ──── komunikácia cez rodiča-proxy
+    │
+    ├──► Mládežnícky šport
+    │
+    ├──► Amatérska úroveň
+    │
+    ├──► Polo-profesionálna
+    │
+    └──► Profesionálna (zmluvy, sponzori, reprezentácia)
+
+       Vedľajšie cesty:
+       ├── Zranenie / pause
+       ├── Disciplinárna suspenze
+       ├── Prestup do iného klubu
+       └── Zmena športu / multidiscipline
+```
+
+## Kategórie športovcov
+
+Systém pozná viac kategórií, líšia sa rozsahom funkcií a vekom:
+
+### Detský šport (do 12-15 rokov, podľa športu)
+
+- Komunikácia primárne cez **rodiča-proxy**
+- Aktivity zaznamenáva tréner (dieťa nemá samostatný vstup do aplikácie)
+- Lekárske záznamy s kompletným prístupom rodiča
+- Žiadne profesionálne licencie, žiadne zmluvy
+
+### Mládežnícky šport (15-18 rokov)
+
+- Po dosiahnutí `Organization.minorSelfJoinAge` má dieťa vlastný účet
+- Rodič stále má read-only prístup
+- Začína sa potenciálne profesionálna kariéra (zmluvy s mládežníckym programom)
+
+### Amatérsky šport (dospelí)
+
+- Plný účet
+- Členstvo v amatérskej súťaži, neprofesionálne
+- Žiadny štipendium ani zmluvy
+- Žiadna licencia (nie je potrebná)
+
+### Polo-profesionálny šport
+
+- Čiastočná zmluva s klubom
+- Možný štipendium z rezortného strediska
+- Súťažná úroveň: II. liga, prvoligová juniorka
+
+### Profesionálny šport
+
+- Plná zmluva s klubom
+- Sponzorské príjmy
+- Reprezentačná povinnosť
+- Antidopingový pool (whereabouts evidencia)
+- Licencia (ak šport vyžaduje, napr. boxing, MMA)
+
+## Registrácia
+
+### Detský šport — cez rodiča
+
+1. Rodič sa registruje sám (`Person` so `primaryRole: 'parent'` cez OrganizationMember)
+2. Rodič vyplní profil dieťaťa (kompletné údaje vrátane rodného čísla)
+3. Vznikne `Person` pre dieťa, `kind: 'internal'`, `primaryRole: 'athlete'`
+4. Vznikne `ParentalAccess(parentId, childId)` s `validUntil = childBirthDate + 18 rokov`
+5. Klub pridá dieťa ako `OrganizationMember` s `role: 'athlete'`
+
+Dieťa nemá email/heslo, do aplikácie pristupuje len rodič v jeho mene.
+
+### Po `minorSelfJoinAge`
+
+Dieťa môže získať vlastný účet:
+
+1. Klubový manažér alebo rodič pošle pozvánku na email dieťaťa
+2. Dieťa potvrdí, vytvorí prihlasovacie údaje
+3. Dostane plný prístup k *svojim* dátam
+4. Rodič si zachová read-only prístup do plnoletosti
+
+### Dospelý — samostatne
+
+1. Self-registration cez aplikáciu
+2. Vstupuje s emailom + heslom
+3. Klub ho pozve do členstva, alebo si dospelý vyhľadá klub a požiada o členstvo
+
+### Migrácia z existujúcich evidencií
+
+Pri prvotnom nasadení projekt importuje existujúcich športovcov z ltksolutions/sportup.sk projektu cez initial backfill. Detaily v [../04-sportup-integration](/sportup-sk-integration).
+
+## Hlavné typy aktivít
+
+Športovec generuje široké spektrum aktivít. Kompletný zoznam v [../02-domain-model](/domain-model), tu zhrnutie najdôležitejších:
+
+### `training` — Tréning
+
+Najfrekventovanejšia aktivita. Eviduje sa per športovec a per session:
+
+```
+Training {
+  trainingType: 'conditioning' | 'technical' | 'tactical' | 'recovery' | 'competition_prep',
+  occurredAt, durationMinutes,
+  intensity: 1-10 (RPE),
+  participantPersonIds: [athlete],
+  recordedByPersonId: <self alebo tréner>,
+  drills: [...],  // sport-specific
+  metrics: { heartRate, distance, ... },  // ak sa mernil
+}
+```
+
+### `match_participation` — Účasť na zápase / preteku
+
+```
+MatchParticipation {
+  matchId,
+  role: 'starter' | 'substitute' | 'reserve',
+  occurredAt, durationMinutes,
+  result: { goals, assists, minutes_played, ... },  // sport-specific
+}
+```
+
+### `medical_treatment` — Zdravotná aktivita
+
+Najcitlivejší typ. Vstupné prehliadky, ošetrenia po zraneniach, fyzio sedenia, atď.
+
+```
+MedicalTreatment {
+  personId: <athlete>,
+  treatmentType: 'examination' | 'treatment' | 'rehabilitation' | 'preventive',
+  diagnosis: <text>,  // šifrované, audit log
+  treatment: <text>,
+  recordedByPersonId: <medical professional>,
+  followUpRequired: boolean,
+}
+```
+
+### `education_event` — Vzdelávacie aktivity
+
+Napríklad antidopingové školenia (povinné pre profesionálov), bezpečnostné kurzy.
+
+### `donation` — Prijatý príspevok
+
+Ak má športovec mecenášov alebo crowdfunding kampaň.
+
+### `sponsorship_activation` — Sponzorská aktivácia
+
+Účasť na kampaňach sponzora.
+
+## Špecifické moduly pre profesionálov
+
+### Antidoping pool a whereabouts
+
+Profesionálni športovci v testovacom poole sú povinní udržiavať aktuálnu adresu pobytu (whereabouts):
+
+```
+AntidopingRecord {
+  personId,
+  recordType: 'whereabouts' | 'test_result' | 'tue_application',
+  occurredAt,
+  ... // sport-specific
+}
+```
+
+ACL: najprísnejšia, viď [../acl/matrix-comments](/acl/matrix-comments).
+
+### Zmluvy
+
+`Contract` entita (TBD pre budúcu iteráciu, momentálne mimo MVP):
+
+- Klubová zmluva
+- Sponzorská zmluva
+- Reprezentačná dohoda
+- Manažérska zmluva
+
+### Reprezentácia
+
+Reprezentačné nominácie sú špeciálny prípad `match_participation` s `level: 'national_team'` flagom.
+
+## Vzťahy s ostatnými používateľmi
+
+Športovec má v systéme vzťahy s:
+
+- **Tréner** — kto ho vedie, hodnotí, plánuje tréning
+- **Lekár / fyzio** — kto ho ošetruje
+- **Mentor** (v niektorých športoch a kontextoch — bývalý reprezentant ako mentor mladého)
+- **Spoluhráči** — v tíme
+- **Manažér / agent** — pre profesionálov
+- **Sponzori** — financovanie a aktivácie
+- **Rodič** (do plnoletosti) — proxy v komunikácii a pristup k dátam
+
+Tieto vzťahy sa modelujú cez:
+
+- `OrganizationMember` (klubové členstvo, tím)
+- `MentoringCycle` (ak relevantné)
+- Courier konverzácie
+
+## Postup v kariére
+
+### Detský → mládežnícky
+
+V určitom veku (per šport) prejde z detskej do mládežníckej kategórie. Toto je administratívna zmena v `OrganizationMember` (zmena kategórie tímu) a možný prechod z detského tréningového plánu na mládežnícky.
+
+### Mládežnícky → seniorský
+
+Často kritický moment kariéry. V systéme:
+
+- Nový `OrganizationMember` pre seniorský tím
+- Mládežnícky postupne ukončený
+- Ak nastane prestup, nasleduje proces prestupu
+
+### Profesionálny prestup
+
+Klub A → Klub B:
+
+1. Klub B kontaktuje athleta (alebo agenta)
+2. Pri dohode klub B vytvorí registráciu prestupu (mimo MVP, manuálne)
+3. `OrganizationMember` v klube A sa ukončí (`endedAt`)
+4. Nový `OrganizationMember` v klube B
+5. Aktivity zostávajú s pôvodnou väzbou (historický audit)
+
+## Špeciálne stavy
+
+### Zranenie
+
+`Person.activityStatus: 'injured'` (tag, nie tvrdé blokovanie):
+
+- Tréner vidí stav v tíme
+- Lekár pridá `MedicalTreatment` so zranením
+- Plánovaný návrat (`return_to_play_date`)
+- Tréningový plán sa adaptuje
+
+### Disciplinárna suspenze
+
+Klub alebo zväz suspenduje športovca:
+
+- `OrganizationMember` zostáva, ale s `suspendedUntil: <date>`
+- Nemôže byť pridelený na zápasy
+- Audit log
+
+### Long-term injury / kariérne prerušenie
+
+Pre dlhodobé prerušenia (>6 mesiacov):
+
+- Status `Person.activityStatus: 'inactive'`
+- `OrganizationMember.endedAt: <date>` voliteľne (závisí od klubu)
+- Pri návrate sa môže reaktivovať
+
+## Ukončenie kariéry
+
+### Voluntary retirement
+
+Športovec sa rozhodne ukončiť:
+
+1. V profile zvolí *"Ukončiť aktívnu kariéru"*
+2. Klub potvrdí, ukončia `OrganizationMember`
+3. `Person.activityStatus: 'retired'`
+4. Profil zostáva — bývalý športovec môže byť stále *mentor*, *tréner*, *podporovateľ*
+
+### Vynútené ukončenie
+
+Pri vážnom zranení znemožňujúcom pokračovať, vekovom limite (v niektorých športoch). Manuálny proces.
+
+### Po ukončení kariéry
+
+Profil archivovaný ale prístupný. Štatistiky kariéry zostávajú. Ak sa rozhodne stať trénerom alebo mentorom, len získa nový `OrganizationMember` s príslušnou rolou — `Person` zostáva tá istá.
+
+## Reporty a štatistiky
+
+### Pre športovca
+
+Personálny dashboard:
+
+- Najbližšie tréningy a zápasy
+- Historické výsledky
+- Tréningové štatistiky (objem, intenzita, RPE trendy)
+- Zdravotné záznamy (vlastné)
+- Hodnotenia od trénera
+
+### Pre klubový manažment
+
+Tímové prehľady:
+
+- Aktívni hráči podľa pozícií
+- Vekové rozloženie
+- Zranenia a return-to-play
+- Tréningová účasť
+
+### Pre rodiča
+
+Pri detskom športe:
+
+- Aktivity dieťaťa (tréningy, zápasy)
+- Lekárske záznamy
+- Komunikácia s trénerom
+- Hodnotenia
+
+## ACL pre športovca
+
+Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
+
+| Aktivita | Subjekt | Tréner klubu | Lekár klubu | Rodič (ak maloletý) |
+|---|---|---|---|---|
+| Vlastný `training` | ✓ | ✓ | – | ✓ |
+| Vlastný `match_participation` | ✓ | ✓ | – | ✓ |
+| Vlastný `medical_treatment` | ✓ | – | ✓ | ✓ (full) |
+| Vlastný `mentoring_session` | ✓ | – (ak nie mentor) | – | ✓ |
+| Vlastný `donation` | ✓ | – | – | ✓ |
+| Vlastný `antidoping_record` | ✓ | – | – | ✓ |
+
+## UI obrazovky
+
+V skratke (mockupy v [../ui/mockups](/ui/mockups)):
+
+### Dashboard športovca
+
+**Sekcie:**
+- Najbližšie aktivity (3-5 dní dopredu)
+- Posledné výsledky
+- Tréningové štatistiky (sparklines)
+- Zdravotný status
+- Notifikácie
+
+### Profil športovca
+
+**Hlavička:** meno, foto, klub, pozícia, kategória, vek.
+
+**Sekcie:**
+- Štatistiky kariéry
+- História klubov
+- Zranenia a návraty
+- Vzdelávanie a kurzy
+- Mentoring (ak existuje)
+
+## Notifikácie pre športovca
+
+| Udalosť | Notifikácia |
+|---|---|
+| Nový tréningový plán | email + push |
+| Tréner pridal hodnotenie | email + push |
+| Nominácia na zápas | email + push |
+| Lekársky záznam pridaný | email |
+| Nová správa v Courier | email digest |
+| Pozvánka do tímového chatu | email + push |
+| Antidopingové oznámenie | email + push (high priority) |
+
+## Otvorené otázky
+
+1. **Multi-šport športovci** — niektoré deti hrajú zaraz futbal aj atletiku. Žiadny problém v schéme (`OrganizationMember` v dvoch organizáciách), ale UI musí podporiť multi-tenant prepínanie.
+
+2. **Bývalí profesionáli ako mentori** — bývalý reprezentant chce mentorovať mládež. Schéma podporuje (`License` s typom `coach` alebo `mentor`), ale workflow vstupu je TBD.
+
+3. **Cross-border športovci** — slovenský hráč v zahraničnom klube. Aktivity sú u zahraničného klubu (mimo nášho systému), my sledujeme len reprezentačnú a výchovnú časť. Cross-tenant aspekt je TBD.
+
+## Nasleduje
+
+Pre tréner pokračuj v [coach](coach).
+Pre rozhodca pokračuj v [referee](referee).
+Pre fanúšika pokračuj v [fan](fan).

@@ -1,0 +1,26 @@
+{
+  "name": "activity",
+  "version": "0.1.0",
+  "description": "Platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom športe",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:docs": "npm run dev --workspace=@activity/docs",
+    "build:docs": "npm run build --workspace=@activity/docs",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ltksolutions/activity.git"
+  }
+}

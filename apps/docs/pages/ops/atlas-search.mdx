@@ -1,0 +1,368 @@
+# Atlas Search
+
+Tento dokument popisuje **full-text vyhľadávanie** v systéme. Používame [MongoDB Atlas Search](https://www.mongodb.com/docs/atlas/atlas-search/) — natívnu integráciu Apache Lucene v MongoDB Atlas. Žiadny separátny Elasticsearch / Meilisearch — všetko zostáva v jednej databáze.
+
+## Princípy
+
+### Prečo Atlas Search
+
+- **Žiadna duplicita dát** — search index je v rovnakej DB ako live data
+- **Žiadna sync logika** — Atlas to rieši automaticky cez change streams
+- **Slovenčina** podporovaná cez Lucene analyzers
+- **ACL pomôcka** — search pre filter, ACL aplikuje sa na výsledok
+- **Náklady** — zahrnutý v Atlas tier-e, žiadny dodatočný service
+
+### Filozofia: search ako pomôcka, ACL je guarantor
+
+Atlas Search **nikdy** nie je autoritou pre prístup. Je to len **vyhľadávací filter** — vráti relevantné dokumenty, autorizačná vrstva potom:
+
+1. Aplikuje ACL gate
+2. Odfiltruje nedostupné dokumenty
+3. Vráti len to, čo user smie vidieť
+
+Hľadanie môže vrátiť dokument; ak naň user nemá prístup, **nezobrazí sa**. Toto pravidlo je dôležité — search index nie je "zoznam, čo existuje", je to "zoznam, čo *by* mohlo byť relevantné".
+
+## Indexy
+
+### Per collection
+
+Každý indexovaný collection má vlastný search index. Definícia ide cez Atlas UI alebo MongoDB driver:
+
+```typescript
+await db.collection('mentoringSession').createSearchIndex({
+  name: 'default',
+  definition: {
+    mappings: {
+      dynamic: false,
+      fields: {
+        summary: { type: 'string', analyzer: 'lucene.slovak' },
+        outcome: { type: 'string', analyzer: 'lucene.slovak' },
+        nextSteps: { type: 'string', analyzer: 'lucene.slovak' },
+        topics: { type: 'string', analyzer: 'keyword' },
+        competencyTags: { type: 'string', analyzer: 'keyword' },
+        recordedByPersonId: { type: 'objectId' },
+        cycleId: { type: 'objectId' },
+        tenantId: { type: 'objectId' },
+        occurredAt: { type: 'date' },
+      },
+    },
+  },
+});
+```
+
+### Mapovanie polí per typ
+
+#### Free text (analyzer: slovak)
+
+- `summary`, `outcome`, `nextSteps` v `mentoringSession`
+- `body` v `activityComment`, `message`
+- `description` v `match`, `incident`
+- `notes` v `medicalTreatment` (s ACL gate-om)
+- `finalEvaluation` v `mentoringCycle`
+
+#### Keyword (analyzer: keyword)
+
+- `topics`, `competencyTags`, `treatmentType`, `licenseType`
+- ID-čka pre filtering (cycleId, conversationId, ...)
+- Enum-ové polia
+
+#### Numeric / Date
+
+- `occurredAt`, `createdAt`, `validUntil`
+- `durationMinutes`, `intensity`
+
+### Veľkosť indexov
+
+Atlas Search indexy zaberajú miesto navyše (typicky 30-50% size of data). Pri rozhodovaní *čo indexovať*:
+
+- **Indexovať len to, čo sa hľadá** — žiadne `dynamic: true`
+- **Vynechať polia bez search use case** — privátne notes, audit polia
+
+## Slovenčina v search-i
+
+### Slovak analyzer
+
+Lucene má `lucene.slovak` analyzer — robí stemming a lemmatizáciu. Príklady:
+
+| Search query | Match dokumenty obsahujúce |
+|---|---|
+| "rozhodca" | "rozhodca", "rozhodcovia", "rozhodcom", "rozhodcovský" |
+| "trénovanie" | "trénovanie", "tréning", "tréner", "trénoval" |
+| "ofsajd" | "ofsajd", "ofsajdový", "ofsajdy" |
+
+Toto je **najdôležitejší** krok — bez stemming-u by užívatelia museli hľadať presné slová.
+
+### Diakritika
+
+Default analyzer **rozlišuje** diakritiku — *"trener"* nedá match na *"tréner"*. Pre user-friendly UX pridáme **ASCII folding**:
+
+```javascript
+{
+  analyzer: {
+    type: 'custom',
+    charFilters: [],
+    tokenizer: { type: 'standard' },
+    tokenFilters: [
+      { type: 'lowercase' },
+      { type: 'asciiFolding' },
+      { type: 'snowball', language: 'slovak' },
+    ],
+  },
+}
+```
+
+S týmto analyzer-om search *"trener"* vráti dokumenty s *"tréner"* aj naopak.
+
+### Synonymá
+
+Niektoré výrazy majú ekvivalenty, ktoré chceme považovať za totožné:
+
+```
+ofsajd <-> postavenie mimo hry
+penalta <-> penaltový kop, jedenástka, pokutový kop
+sezóna <-> ročník, rok
+```
+
+Atlas Search podporuje **synonyms collection**:
+
+```typescript
+await db.collection('searchSynonyms').insertOne({
+  mappingType: 'equivalent',
+  synonyms: ['ofsajd', 'postavenie mimo hry'],
+});
+```
+
+V index definícii pridáme `synonyms` reference.
+
+## Query patterns
+
+### Basic full-text
+
+```typescript
+const results = await db.collection('mentoringSession').aggregate([
+  {
+    $search: {
+      index: 'default',
+      text: {
+        query: 'ofsajd VAR',
+        path: ['summary', 'outcome', 'nextSteps'],
+      },
+    },
+  },
+  { $match: { tenantId: currentTenantId } },  // Tenant scope
+  { $limit: 50 },
+]).toArray();
+```
+
+### S filtrami
+
+```typescript
+{
+  $search: {
+    index: 'default',
+    compound: {
+      must: [
+        {
+          text: {
+            query: 'pre-match preparation',
+            path: ['summary', 'outcome'],
+          },
+        },
+      ],
+      filter: [
+        { equals: { value: cycleId, path: 'cycleId' } },
+        {
+          range: {
+            path: 'occurredAt',
+            gte: new Date('2025-01-01'),
+          },
+        },
+      ],
+    },
+  },
+}
+```
+
+### S highlighting
+
+Pre user-friendly UX zobrazíme **fragments** s zvýraznenou query časťou:
+
+```typescript
+{
+  $search: {
+    index: 'default',
+    text: { query: 'ofsajd', path: ['summary', 'outcome'] },
+    highlight: { path: ['summary', 'outcome'] },
+  },
+},
+{
+  $project: {
+    summary: 1,
+    outcome: 1,
+    highlights: { $meta: 'searchHighlights' },
+    score: { $meta: 'searchScore' },
+  },
+}
+```
+
+V UI sa zobrazí: *"...mentee preukázal pochopenie pravidla pre **ofsajd**ové postavenie..."*
+
+### Multi-collection search
+
+Pre query naprieč viacerými collections (napr. *"hľadaj ofsajd vo vsetkých moich datach"*) **nemáme** native Atlas Search. Riešenie:
+
+1. **Per-collection search** v paralelnom volaní
+2. **Merge a re-rank** v aplikácii
+3. **ACL gate** na merge-nuté výsledky
+
+Implementujeme `MultiSearchService.search(query, collections, currentUser)`.
+
+## ACL aplikácia
+
+Atlas Search nemá ACL. Aplikácia sa robí **post-search**:
+
+```typescript
+async function searchMentoringSessions(query: string, user: User) {
+  // 1. Atlas Search vráti relevantné dokumenty
+  const candidates = await db.collection('mentoringSession').aggregate([
+    {
+      $search: {
+        index: 'default',
+        text: { query, path: ['summary', 'outcome'] },
+      },
+    },
+    { $match: { tenantId: user.tenantId } },  // Tenant pre-filter
+    { $limit: 100 },  // Vyšší limit, lebo niektoré sa vyfiltrujú
+  ]).toArray();
+
+  // 2. ACL filter
+  const accessible = [];
+  for (const session of candidates) {
+    if (await acl.canRead(user, 'mentoring_session', session._id)) {
+      accessible.push(session);
+    }
+  }
+
+  // 3. Final limit
+  return accessible.slice(0, 20);
+}
+```
+
+Pre **performance**: ACL check sa snažíme robiť čo najefektívnejšie (cache, batch). Pre niektoré ACL pravidlá vieme `pre-filter` — napr. *mentoring sessions kde mentor = user* sa dá robiť ako súčasť `$search` filter (`compound.filter`).
+
+## Performance
+
+### Latency
+
+Atlas Search query typicky:
+
+- Simple text query: 10-50ms
+- Compound s filtrom: 30-100ms
+- S highlighting: +20ms
+- ACL filter v aplikácii: +50-200ms (závisí od počtu kandidátov)
+
+Cieľ: **search response < 500ms p95**.
+
+### Optimization
+
+- **Sortovanie podľa score** — bez explicitného sort, Atlas vracia podľa relevance
+- **Limit** vždy aplikovaný
+- **Pre-filter** cez `compound.filter` (lacné) namiesto `$match` (drahé)
+- **Cache** populárnych queries v Redis (5 minút TTL)
+
+### Concurrency
+
+Atlas Search beží na separátnych nodoch v Atlas-e. Concurrent queries netrhajú write traffic.
+
+## Use cases
+
+### Pre mentora
+
+*"Kde sme rozoberali ofsajd s Tomášom?"*
+
+- Atlas Search v `mentoringSession` collection
+- Filter: `cycleId` v cykloch s mentorom
+- Filter: tematický keyword
+- Highlight v summary / outcome
+
+### Pre rozhodcu
+
+*"Moja história rozborov VAR situácií"*
+
+- Search v vlastných sessions + komentároch
+- Filter: `participantPersonIds: self`
+- Tematický keyword
+
+### Pre admin organizácie
+
+*"Najfrekventovanejšie témy mentoringu v komisii"*
+
+- Aggregation cez všetky sessions v tenant
+- Group by `topics`
+- Sort by count desc
+
+(Toto je viac **analytics** ako search, ale úzko súvisí.)
+
+### Pre fanúšika
+
+*"Hľadaj zápasy môjho obľúbeného hráča"*
+
+- Search v `match_participation`
+- Filter: `participantPersonIds: <player>`
+- Filter: tenantId
+
+## Indexované collections
+
+Pre MVP indexujeme:
+
+| Collection | Polia | Use case |
+|---|---|---|
+| `mentoringSession` | summary, outcome, nextSteps, topics, competencyTags | Mentor / mentee search |
+| `mentoringCycle` | finalEvaluation | Career history |
+| `activityComment` | body | Diskusie, mentions |
+| `message` (non-E2E only) | body | Hľadanie v group / broadcast |
+| `match_participation` | description, notes | Match history |
+| `medical_treatment` | (s prísnejším ACL) | Klinický search |
+| `incident_report` | description | Bezpečnostný review |
+| `person` | firstName, lastName | Hľadanie osoby |
+| `organization` | displayName, legalName | Hľadanie organizácie |
+
+E2E šifrované `direct` správy **nie sú** indexované na serveri (server vidí len ciphertext). Klient môže mať lokálny search.
+
+## Maintenance
+
+### Index rebuild
+
+Pri zmene index definície (nový analyzer, nový field) sa index **rebuildne** automaticky. Pre veľké collections to môže trvať hodiny — Atlas to robí v pozadí.
+
+Pre staging/dev rebuild typicky v sekundách.
+
+### Synonymá update
+
+Synonymá sa updatujú live cez collection. Žiadny index rebuild nepotreba.
+
+### Sledovanie velkosti
+
+Atlas dashboard ukazuje:
+
+- Index size
+- Query rate
+- Latencies
+
+Mesačný review — ak index zaberá > 200% data size, prehodnotíme čo indexujeme.
+
+## Otvorené otázky
+
+1. **Vector search pre AI** — Atlas Search podporuje vector search (knnBeta operator). Pre future use cases s LLM (napr. semantic search v mentoring sedeniach) toto plánujeme. Vyžaduje embedding pipeline.
+
+2. **Multi-language search** — pre EN/CS používateľov treba paralel index per jazyk. Alebo `lucene.standard` ako fallback. TBD pri implementácii multi-jazyčnej podpory.
+
+3. **Recency boost** — staršie sedenia sa môžu mierne podpíliť, novšie boostnúť. Atlas Search má `function score` pre toto.
+
+4. **Personalized ranking** — ranking based na user-specific signals (frequently accessed cycles boost). TBD ML feature.
+
+## Nasleduje
+
+Pre database migrations pokračuj v [migrations](migrations).
+Pre deployment pokračuj v [deployment](deployment).
+Pre detail Mentoring search use case pokračuj v [../features/mentoring](/features/mentoring).

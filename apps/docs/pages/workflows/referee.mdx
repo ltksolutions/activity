@@ -1,0 +1,393 @@
+# Workflow — Rozhodca
+
+Tento dokument popisuje životný cyklus rozhodcu v systéme — od registrácie cez vzdelávanie a mentoring, výkon kariéry, až po ukončenie. Rozhodca je *najprepracovanejšia* kategória v aktuálnej fáze projektu, pretože k nej je zviazaný mentoring subsystém.
+
+## Životný cyklus
+
+```
+   Registrácia
+       │
+       ▼
+   Základné vzdelávanie ──── získa "trainee" status
+       │
+       ▼
+   Pridelenie mentora ──── vzniká MentoringCycle
+       │
+       ▼
+   Aktívny rozhodca ──── získa licenciu úrovne IV (najnižšia)
+       │
+       ├──► Postup: Rozhodovanie zápasov, hodnotenia, mentoringové sedenia
+       │
+       ├──► Postup do triedy III, II, I
+       │
+       ├──► Špecializácia (VAR, asistent, hlavný)
+       │
+       └──► Medzinárodná úroveň (UEFA mentor priradený k cyklu)
+
+       Možné stavy: Pause (zranenie, prerušenie), Suspended (disciplinárne)
+
+       Ukončenie: Voluntary retirement, expiry licencie, vekový limit
+```
+
+## Registrácia
+
+### Vstupné body
+
+Rozhodca sa do systému dostáva tromi cestami:
+
+1. **Self-registration** cez aplikáciu — musí byť pozvaný organizáciou (zväz vydáva pozvánky)
+2. **Hromadná registrácia zväzom** — admin importu dát zväzu pridáva rozhodcov v dávke
+3. **Migrácia z existujúcich evidencií** — pri prvotnom nasadení projektu
+
+V každom prípade:
+
+- Vznikne `Person` v `activity_registry` s `primaryRole: 'professional'`
+- Synchronizácia s ltksolutions/sportup.sk projekt cez `externalRefs.sportupSkId`
+- Vznikne `OrganizationMember` s `role: 'referee'` v príslušnej komisii rozhodcov
+
+### Stav po registrácii
+
+V tomto bode rozhodca **ešte nemá licenciu**. Status `trainee` (interný flag, nie v licencii). Môže:
+
+- Pristupovať do aplikácie
+- Vidieť verejné materiály komisie
+- Zúčastniť sa základného vzdelávania
+
+Nemôže:
+
+- Byť priradený na zápas
+- Mať mentoring cyklus
+
+## Základné vzdelávanie
+
+Štandardný kurz pred vstupom do aktívnej činnosti. Eviduje sa ako `EducationEvent` aktivita s `educationType: 'referee_basic_training'`.
+
+### Štruktúra
+
+| Modul | Trvanie | Aktivita |
+|---|---|---|
+| Pravidlá hry | ~20 hodín | rozsah otázok, video rozbory |
+| Praktická aplikácia | ~40 hodín | rozhodovanie tréningových zápasov pod dozorom |
+| Etika a komunikácia | ~10 hodín | situačné cvičenia |
+| Záverečná skúška | ~4 hodiny | písomka + praktická skúška |
+
+### V systéme
+
+```
+Activity: education_event
+  educationType: 'referee_basic_training'
+  participantPersonIds: [trainee]
+  occurredAt: <začiatok>
+  durationMinutes: <trvanie>
+  status: 'enrolled' | 'in_progress' | 'completed' | 'failed'
+```
+
+Po `completed` automaticky:
+
+- Trainee dostane `License` typu `referee`, level `IV`
+- Trainee dostane oprávnenie byť pridelený na zápasy najnižšej úrovne
+- Spustí sa proces priradenia mentora
+
+## Pridelenie mentora
+
+### Mechanika
+
+Po dokončení základného vzdelávania:
+
+1. Predseda komisie rozhodcov dostane notifikáciu *"Nový rozhodca {meno} čaká na priradenie mentora"*
+2. Predseda otvorí v aplikácii zoznam dostupných mentorov (rozhodcovia s licenciou aspoň úrovne II + flag `eligibleAsMentor`)
+3. Vyberie mentora a navrhne pridelenie
+4. Mentor potvrdí (alebo odmietne)
+5. Po potvrdení mentor sám zakladá `MentoringCycle` (z dohody: cyklus zakladá vždy mentor)
+
+### MentoringCycle parametre pre rozhodcu
+
+```typescript
+{
+  mentorPersonId: <skúsený rozhodca>,
+  menteePersonId: <nový rozhodca>,
+  sportId: <futbal | basketbal | ...>,
+  level: 'regional',  // začína s regional
+  foundedByPersonId: <mentor (vynútené)>,
+  startedAt: <dátum priradenia>,
+  status: 'active',
+}
+```
+
+### Externí mentori
+
+Pri postupe rozhodcu na vyššie úrovne sa do cyklu môžu pridať externí mentori:
+
+- **Pri postupe na národnú úroveň** — bývalý slovenský medzinárodný rozhodca
+- **Pri kandidatúre na UEFA listinu** — UEFA mentor (`Person` s `kind: 'external_lightweight'`)
+- **Pri FIFA listine** — FIFA mentor
+
+Pridanie cez `add_external_mentor(cycleId, externalPersonId)`.
+
+## Aktívna kariéra
+
+### Hlavné typy aktivít
+
+V tejto fáze rozhodca generuje rôzne typy aktivít:
+
+#### `training` — Tréning
+
+Fyzická príprava, technický tréning. Pre rozhodcu typicky:
+
+- Kondičná príprava (intervaly, vytrvalosť)
+- Test fyzickej zdatnosti (Yo-Yo, 12-min beh)
+- Video rozbory a samoštúdium
+
+```
+Training {
+  trainingType: 'conditioning' | 'technical' | 'recovery',
+  durationMinutes, location, intensity,
+  recordedByPersonId: <self alebo kondičný tréner>,
+}
+```
+
+#### `match_participation` — Účasť na zápase
+
+Každý rozhodovaný zápas je aktivita:
+
+```
+MatchParticipation {
+  matchId: <ID zápasu z čisla>,
+  role: 'main_referee' | 'assistant' | 'fourth' | 'var' | 'observer',
+  occurredAt: <kick-off>,
+  durationMinutes: 90 + nadstavenia,
+  participantPersonIds: [self],
+}
+```
+
+Po zápase sa pridáva:
+
+#### `match_evaluation` — Hodnotenie zo zápasu
+
+Delegát hodnotí výkon rozhodcu. Štruktúra závisí od športu (UEFA observer report štruktúra pre futbal):
+
+```
+MatchEvaluation {
+  matchId,
+  evaluatedPersonId: <rozhodca>,
+  evaluatorPersonId: <delegát>,
+  scores: {
+    positioning: 1-10,
+    fitness: 1-10,
+    matchControl: 1-10,
+    personality: 1-10,
+    cooperation: 1-10,
+  },
+  comments: <text>,
+  recommendation: 'promote' | 'maintain' | 'review',
+}
+```
+
+ACL: rozhodca vidí svoje hodnotenie, predseda komisie tiež, mentor (ak aktívny cyklus) tiež. Detaily v [../acl/matrix-comments](/acl/matrix-comments).
+
+#### `mentoring_session` — Mentoringové sedenie
+
+Najdôležitejší typ aktivity v rozvoji mladého rozhodcu. Detaily v [../features/mentoring](/features/mentoring).
+
+V kontexte rozhodcu typicky obsahuje:
+
+- Rozbor situácií zo zápasu (`match_situation_review`)
+- Predzápasovú prípravu (`pre_match_preparation`)
+- Pozápasový debrief (`post_match_debrief`)
+- Výklad pravidla (`rule_interpretation`)
+
+#### `education_event` — Kontinuálne vzdelávanie
+
+Pre udržanie a postup licencie. Príklady:
+
+- Sezónne semináre (povinné)
+- Workshopy o nových pravidlách
+- Antidopingové školenia
+- Jazykové kurzy (pre medzinárodnú úroveň)
+
+```
+EducationEvent {
+  educationType: 'seminar' | 'workshop' | 'course' | 'certification',
+  creditsEarned: <int>,  // pridáva sa do License.creditsEarned
+  organizingOrgId,
+}
+```
+
+## Postup v kariére
+
+### Levely licencie
+
+Štandardná hierarchia (futbal SR):
+
+| Level | Oprávnenie |
+|---|---|
+| **IV** | Najnižšia, regionálne ligy |
+| **III** | III. liga |
+| **II** | II. liga |
+| **I** | I. liga (Fortuna liga) |
+| **UEFA Listina** | Medzinárodné súťaže UEFA |
+| **FIFA Listina** | Medzinárodné súťaže FIFA |
+
+### Postup vyžaduje
+
+- Dostatok odrobených sezón na aktuálnej úrovni
+- Pozitívne hodnotenia zo zápasov
+- Aktívny mentoring (do vyšších úrovní)
+- Splnenie vzdelávacích kreditov
+- Schválenie komisiou rozhodcov
+
+V systéme sa postup rieši cez `License`:
+
+```typescript
+// Aktuálna licencia: level "III"
+const newLicense = await issueLicense({
+  personId: refereeId,
+  licenseType: 'referee',
+  level: 'II',
+  issuingOrgId: <komisia>,
+  validUntil: <dátum>,
+});
+
+// Predchádzajúca sa zruší alebo zostane v archíve
+```
+
+## Špeciálne stavy
+
+### Pause (zranenie, prerušenie)
+
+Rozhodca dočasne nečinný. License zostáva `active`, ale rozhodca nemôže byť pridelený na zápasy.
+
+V systéme:
+
+- Atribút `Person.activityStatus: 'paused'` (mimo License)
+- `MentoringCycle.status: 'paused'` (cez `pause_mentoring_cycle`)
+- Notifikácia komisii
+
+### Suspended (disciplinárne)
+
+Komisia rozhoduje o disciplinárnom postihu. License je `suspended`, mentoring cyklus je *paused* alebo *terminated* podľa závažnosti.
+
+V systéme:
+
+- `License.status: 'suspended'` so záznamom dôvodu
+- Audit log v `auditLog`
+- Notifikácia rozhodcovi
+
+### Vekový limit
+
+Niektoré športy majú vekový limit pre rozhodcov najvyšších úrovní (napr. UEFA má 50/55 rokov pre rôzne kategórie). System kontroluje pri nominácii na zápas.
+
+## Ukončenie kariéry
+
+### Voluntary retirement
+
+Rozhodca sa rozhodne ukončiť aktívnu činnosť:
+
+1. V profile zvolí *"Ukončiť aktívnu kariéru"*
+2. Komisia dostane notifikáciu, potvrdí
+3. License sa nastaví na `expired` s `closureReason: 'voluntary_retirement'`
+4. Aktívne mentoring cykly sa ukončia (`completed` ak je hodnotenie, inak `terminated`)
+5. `Person.activityStatus: 'retired'`
+
+Profil zostáva — bývalý rozhodca môže byť stále *mentor*, *delegát*, *poradca* (rôzne roly v `OrganizationMember`).
+
+### Expiry license
+
+Ak rozhodca neobnoví licenciu (nemá dosť kreditov, neprešiel testom), license sa automaticky nastaví na `expired`. Background job kontroluje denne.
+
+### Smrť alebo permanent disability
+
+Manuálny proces cez admin organizácie. Profil sa archivuje, GDPR delete request po určitom čase.
+
+## Reporty a štatistiky
+
+### Pre rozhodcu
+
+V profilovom dashboarde rozhodca vidí:
+
+- Počet rozhodovaných zápasov za sezónu
+- Priemerné hodnotenie zo zápasov (cez čas)
+- Vývoj kompetencií podľa hodnotení
+- Mentoring sedenia: počet, hodiny
+- Splnené vzdelávacie kredity vs. potrebné
+
+### Pre komisiu
+
+Predseda komisie vidí:
+
+- Aktívni rozhodcovia per úroveň
+- Mentoring cykly: aktívne, uzavreté, predčasne ukončené
+- Hodnotenia: trendy, problémoví rozhodcovia
+- Vekové rozloženie
+- Pripravovaní na postup
+
+### Pre admin organizácie
+
+Klubová level štatistiky o rozhodcoch nominovaných na ich zápasy. Vrátane potenciálnych konfliktov záujmov.
+
+## ACL pre rozhodcu
+
+Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
+
+| Aktivita | Vidí rozhodca | Vidí mentor (ak cyklus) | Vidí komisia |
+|---|---|---|---|
+| Vlastné `match_participation` | ✓ | ✓ | ✓ |
+| Vlastné `match_evaluation` | ✓ | ✓ | ✓ |
+| Vlastné `training` | ✓ | – (ak nezdieľa) | – |
+| Vlastné `mentoring_session` | ✓ | ✓ | ✓ |
+| Vlastné `education_event` | ✓ | ✓ | ✓ |
+| Vlastné `medical_treatment` | ✓ | – | – (audit only) |
+
+## UI obrazovky pre rozhodcu
+
+Konkrétne mockupy v [../ui/mockups](/ui/mockups). V skratke:
+
+### Profil rozhodcu
+
+**Hlavička:** meno, foto, level licencie, aktuálny status (aktívny/pause/suspended), počet rozhodovaných zápasov.
+
+**Sekcie:**
+- Vzdelávanie (kredity, kurzy)
+- Hodnotenia (trendy, posledné)
+- Mentoring (aktuálny cyklus, mentor, sedenia)
+- Aktivity (timeline všetkých aktivít)
+- Zdravie (lekárske záznamy — len pre samotného a oprávnených)
+
+### Dashboard pre nového rozhodcu
+
+Po prihlásení:
+
+- *"Nadchádzajúce zápasy"* (ak nominovaný)
+- *"Pozvánky na vzdelávanie"*
+- *"Najnovšie hodnotenia"*
+- *"Aktivita v mentoringu"* (návrhy sedení, nové komentáre, nové sedenia od mentora)
+- *"Notifikácie"*
+
+### Detail mentoringového cyklu
+
+Detailne v [../features/mentoring](/features/mentoring).
+
+## Notifikácie pre rozhodcu
+
+| Udalosť | Notifikácia |
+|---|---|
+| Nominácia na zápas | email + push |
+| Nové hodnotenie zo zápasu | email + push |
+| Mentor zaznamenal sedenie | email + push |
+| Nová správa v Courier | email digest (default) |
+| Zmena statusu licencie | email |
+| Komentár pod aktivitou | email digest |
+
+## Otvorené otázky
+
+1. **Konflikt záujmov pri nominácii** — automaticky odhaliť, ak by rozhodca mal rozhodovať zápas, na ktorom hrá rodinný príslušník alebo bývalý klub. Vyžaduje schémové rozšírenie. Pre MVP manuálne.
+
+2. **Real-time hodnotenie počas zápasu** — VAR a delegát môžu komentovať počas zápasu. Toto je out-of-scope pre MVP, plánujeme ako future feature.
+
+3. **Cross-tenant rozhodca** — slovenský rozhodca rozhoduje v UEFA súťaži. Aktivita patrí pod UEFA tenanta, ale rozhodca patrí pod SR. ACL pre takýto cross-tenant prípad je TBD.
+
+## Nasleduje
+
+Pre tréner pokračuj v [coach](coach).
+Pre lekára/fyzio pokračuj v [medical](medical).
+Pre detaily mentoring subsystému pokračuj v [../features/mentoring](/features/mentoring).

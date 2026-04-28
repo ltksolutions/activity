@@ -1,0 +1,24 @@
+{
+  "index": {
+    "title": "Domov",
+    "type": "page",
+    "display": "hidden"
+  },
+  "overview": "Prehľad",
+  "architecture": "Architektúra",
+  "domain-model": "Doménový model",
+  "mcp-servers": "MCP servery (API)",
+  "sportup-sk-integration": "Integrácia s sportup.sk",
+  "features": "Features",
+  "workflows": "Workflows",
+  "acl": "ACL matice",
+  "ops": "Prevádzka",
+  "ui": "UI",
+  "glossary": "Slovník pojmov",
+  "github_link": {
+    "title": "GitHub ↗",
+    "type": "page",
+    "href": "https://github.com/ltksolutions/activity",
+    "newWindow": true
+  }
+}

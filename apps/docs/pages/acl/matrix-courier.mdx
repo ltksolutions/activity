@@ -1,0 +1,292 @@
+# ACL Matrix — Courier
+
+Tento dokument je **referenčná tabuľka** prístupových práv pre Courier konverzácie. Doplňuje [matrix-comments](matrix-comments) o komunikačnú vrstvu.
+
+## Princípy
+
+Courier ACL má dve odlišné dimenzie oproti komentárom:
+
+1. **Iniciovanie konverzácie** — kto smie založiť konverzáciu s kým. Toto je gate *predtým*, než konverzácia vôbec existuje.
+2. **Operácie v existujúcej konverzácii** — kto smie čítať/písať/admin po pridaní do konverzácie.
+
+Operácie sú obohatené o nové (oproti komentárom):
+
+| Skratka | Význam |
+|---|---|
+| **R** | Read messages |
+| **W** | Write messages |
+| **E** | Edit/delete own messages |
+| **A** | Admin (pridať/odobrať účastníkov, archivovať) |
+| **M** | Moderate (cudzie správy, banovať) |
+| **S** | Start (iniciovať konverzáciu) |
+
+## Iniciovanie konverzácií (S — Start)
+
+Kto smie iniciovať direct alebo group konverzáciu s kým. Default pravidlá:
+
+| Iniciátor → cieľ | Default | Podmienka |
+|---|---|---|
+| Mentor → mentee | ✓ | aktívny mentoring cyklus |
+| Mentee → mentor | ✓ | aktívny mentoring cyklus |
+| Externý mentor → mentee | ✓ | priradený k cyklu |
+| Tréner → športovec | ✓ | rovnaký klub, aktívne členstvo |
+| Tréner → rodič-proxy | ✓ | rodič dieťaťa, ktoré tréner trénuje |
+| Rodič-proxy → tréner | ✓ | tréner dieťaťa rodiča |
+| Lekár klubu → športovec | ✓ | rovnaký klub |
+| Športovec → športovec (rovnaký klub) | ✓ | – |
+| Športovec → športovec (rôzne kluby) | opt-in | cieľ musí mať open DM |
+| Fanúšik → športovec | ✗ | kým si profesionál neotvorí DM |
+| Fanúšik → fanúšik | ✓ | s blokovacím právom |
+| Admin zväzu → licencovaný člen | ✓ | člen zväzu |
+| Sponzor → športovec | ✗ | cez klub ako sprostredkovateľa |
+| Predseda komisie → mentor / mentee | ✓ | osoby v jeho komisii |
+| Klubový manažér → klubový člen | ✓ | – |
+| Media manager → fanklub | ✓ | broadcast, fanklub patrí danému klubu |
+| Anonymný / nezalogovaný | ✗ | – |
+
+### Implementácia
+
+V `CourierService.canInitiateConversation(initiator, target)` ide cez tabuľku pravidiel. Pravidlá sú vyhodnocované v poradí — prvé `match` rozhoduje. Default *deny*, ak nič nevyhovuje.
+
+## Operácie v existujúcej konverzácii
+
+### Direct conversation (1:1, E2E šifrované)
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Účastník 1 | ✓ | ✓ | ✓ | – | – |
+| Účastník 2 | ✓ | ✓ | ✓ | – | – |
+| Proxy-rodič — read access do dcérskeho direct chatu | ✓ (read-only) | – | – | – | – |
+| Admin organizácie | – (E2E, server nemá kľúč) | – | – | – | – |
+| Iný | – | – | – | – | – |
+
+#### Poznámky
+
+- Žiadne **A** ani **M** — direct chat nemá adminov, je medzi rovnými dvomi
+- *Proxy-rodič read* sa aplikuje len v špecifickom prípade: dieťa (po dosiahnutí `minorSelfJoinAge`) ↔ odborník (tréner, lekár, mentor); rodič číta read-only. Detaily v [../features/parental-proxy](/features/parental-proxy).
+- Admin organizácie **nemá prístup** k E2E direct chatu, ani na audit. Server vidí len ciphertext.
+
+### Direct conversation — odpojenie
+
+| Akcia | Kto smie |
+|---|---|
+| Opustiť konverzáciu | účastník |
+| Archivovať konverzáciu | účastník (vlastná archivácia, druhý stále vidí) |
+| Zmazať konverzáciu | iba *delete account* flow oboch účastníkov |
+
+### Group conversation
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Plný člen | ✓ | ✓ | ✓ | – | – |
+| Proxy-rodič (zastupujúci dieťa) | ✓ | ✓ (v mene dieťaťa) | ✓ (vlastné správy) | – | – |
+| Admin konverzácie | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Observer (read-only metodik, predseda) | ✓ | – | – | – | – |
+| Externý hosť (priradený) | ✓ | ✓ | ✓ | – | – |
+| Admin organizácie (vlastníckej) | ✓ (audit) | – | – | – | ✓ (blind/declared) |
+| Iný (mimo konverzácie) | – | – | – | – | – |
+
+#### Poznámky
+
+- *Admin konverzácie* je `ConversationParticipant` s `role = 'admin'`
+- Admin organizácie má **R** s audit logom — pri otvorení sa vytvorí audit záznam
+- Admin organizácie môže moderovať (mazať správy), ale toto sa logovo zaznamenáva ako `moderation` akcia
+- Externý hosť (napr. UEFA mentor) je explicitne pridaný adminom, má rovnaké práva ako *plný člen*
+
+#### DND v group
+
+| Stav | Účinok |
+|---|---|
+| `dndActive: false` (default) | normálne notifikácie |
+| `dndActive: true` | žiadne notifikácie, len badge v inboxe |
+
+### Broadcast conversation
+
+Málo publisherov, veľa subscriberov.
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Publisher | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Subscriber | ✓ | – | – | – | – |
+| Admin organizácie | ✓ | ✓ | – | ✓ | ✓ |
+| Externý hosť | – | – | – | – | – |
+| Iný (nie subscriber) | – | – | – | – | – |
+
+#### Poznámky
+
+- *Publisher* je rola pre tých, ktorí smú publikovať do broadcastu (zväz, klub, media manager)
+- *Subscriber* sa pridáva opt-in — buď sa sám prihlási do broadcastu (ak je klub mu otvorený), alebo ho admin pridá pri registrácii (napr. pri pridaní do fanklubu)
+- Reactions na broadcast správy môžu byť povolené — záleží na nastavení broadcastu
+
+## Špecifické scenáre
+
+### Mentoring konverzácia
+
+Konverzácia mentor ↔ mentee aktívneho cyklu — typicky `direct`, ale môže byť aj `group` (mentor + mentee + UEFA mentor).
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Mentor | ✓ | ✓ | ✓ | ✓ (group only) | – |
+| Mentee | ✓ | ✓ | ✓ | – | – |
+| Externý mentor priradený k cyklu | ✓ | ✓ | ✓ | – | – |
+| Predseda komisie (org chair) | – (default) | – | – | – | – |
+| Admin organizácie (komisia rozhodcov) | ✓ (audit) | – | – | – | – (no moderation) |
+
+#### Poznámky
+
+- Predseda komisie **nemá** automatický prístup do mentoringovej konverzácie — to je *súkromný* priestor mentora a mentee
+- Predseda môže byť explicitne pridaný adminom (zriedkavé, vyžaduje súhlas oboch strán)
+- Admin organizácie má **R** ale len v audit móde, žiadna moderation (mentoring konverzácie sú citlivé, moderation by porušila dôveru)
+
+### Tímová konverzácia s rodičmi-proxy
+
+Klubová konverzácia U13: tréner + asistent + rodičia-proxy detí.
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Tréner | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Asistent trénera | ✓ | ✓ | ✓ | – | – |
+| Klubový manažér | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Rodič-proxy | ✓ | ✓ (v mene dieťaťa) | ✓ (vlastné) | – | – |
+| Dieťa (ak vek >= `minorSelfJoinAge`) | ✓ | ✓ (sám) | ✓ | – | – |
+| Admin klubu | ✓ | ✓ | – | ✓ | ✓ |
+
+### Klubový broadcast pre rodičov
+
+| Rola | R | W | E | A | M |
+|---|---|---|---|---|---|
+| Klubový manažér / sekretár | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Rodičia členov klubu | ✓ | – | – | – | – |
+| Admin klubu | ✓ | ✓ | – | ✓ | ✓ |
+
+#### Poznámky
+
+- Toto je broadcast — rodičia len čítajú
+- Pre interakciu rodič ↔ tréner je `direct` konverzácia
+
+### Komunikácia rodič ↔ tréner
+
+`direct` konverzácia rodič ↔ tréner je častý use case.
+
+| Rola | R | W | E |
+|---|---|---|---|
+| Rodič | ✓ | ✓ | ✓ |
+| Tréner | ✓ | ✓ | ✓ |
+| Iný (vrátane dieťaťa, klubového admina) | – | – | – |
+
+Aj keď je rodič v tomto kontexte *zástupcom dieťaťa*, samotný 1:1 chat je medzi dvomi dospelými. Dieťa **nevidí** túto konverzáciu (ani po dosiahnutí plnoletosti — historický prístup je zatvorený).
+
+## Rodičovský prístup detailne
+
+Toto je dôležitý a často nesprávne implementovaný prípad. Detaily v [../features/parental-proxy](/features/parental-proxy), tu zhrnutie:
+
+| Konverzácia | Rodič ako proxy | Rodič ako čitateľ |
+|---|---|---|
+| Direct dieťa ↔ tréner (dieťa < `minorSelfJoinAge`) | rodič vystupuje *miesto* dieťaťa | – |
+| Direct dieťa ↔ tréner (dieťa >= `minorSelfJoinAge`, < 18) | – | rodič číta read-only |
+| Direct dieťa ↔ rovesník | – | rodič **nečíta** |
+| Group klubový chat | rodič ako proxy | – |
+| Group dieťa-priatelia | – | rodič **nečíta** |
+
+V deň 18. narodenín dieťaťa všetky rodičovské práva expirujú (s 30-dňovým grace period pre proxy účastníctva).
+
+## Vyprchávanie prístupu
+
+Naprieč všetkými typmi konverzácií platí:
+
+| Stav | Účinok |
+|---|---|
+| Účastník opustí konverzáciu (`leftAt: <ts>`) | stráca **R/W**, audit log zostáva |
+| Konverzácia je archivovaná | účastníci majú **R**, žiadne **W** |
+| Tréner odíde z klubu | stráca **R/W** v tímových konverzáciách v deň odchodu (cez ukončenie `OrganizationMember`) |
+| Mentor cyklu skončil | konverzácia mentor-mentee zostáva, ale **W** sa stratí (read-only archív) |
+| Rodič — dieťa dovŕši plnoletosť | proxy ide do read-only na 30 dní, potom plné odpojenie |
+| Externý hosť — priradenie skončilo | stráca **R/W** v deň odchodu |
+
+## Restriktívne pravidlá
+
+### Reportovanie a moderation
+
+Ktorýkoľvek účastník môže nahlásiť správu (`report_message`). Hlásenie ide do queue admina organizácie (vlastnícu konverzácie). Admin rozhodne:
+
+- Skryť správu (soft-delete s viditeľným *"odstránené moderátorom"*)
+- Varovať autora (notifikácia)
+- Suspendovať autora v konverzácii (odoberie účastníka, nemôže byť pridaný späť)
+- Eskalácia (predá vyššiemu adminovi alebo system admin)
+
+### Self-blocking
+
+Užívateľ môže zablokovať inú osobu (`block_person`):
+
+- Skryje správy danej osoby pre seba
+- Zablokuje iniciovanie nových direct konverzácií od danej osoby
+- Druhá strana **nedostane info** o blokovaní (privacy)
+
+Block-list je per-user, žije v profile, neviditeľný pre ostatných.
+
+### Restrikcia rodičovského prístupu
+
+`ParentalAccess.restricted: true` pri súdnom obmedzení:
+
+- Rodič nemôže byť pridaný ako proxy do nových konverzácií
+- Stráca read access k existujúcim direct chatom dieťaťa s odborníkmi
+- Existujúce proxy účastníctva idú do read-only
+
+Nastavenie robí len admin organizácie na základe doručeného súdneho rozhodnutia.
+
+## Audit log
+
+Tieto operácie sa povinne logujú do `auditLog`:
+
+- Každý prístup admina organizácie ku konverzácii (s exception: vlastné konverzácie admina)
+- Každá moderation akcia (hide, remove, suspend)
+- Každá zmena ACL roly v konverzácii (`set_participant_role`)
+- Každý report message
+- Každý block/unblock person
+
+Audit log má TTL 7 rokov (GDPR retention pre audit).
+
+## Implementácia
+
+### ACL pre Courier
+
+```typescript
+// courier/acl/canSendMessage.ts
+export async function canSendMessage(user: User, conversationId: ObjectId): Promise<boolean> {
+  const participant = await db.conversationParticipant.findOne({
+    conversationId,
+    personId: user._id,
+    leftAt: null,
+  });
+  if (!participant) return false;
+
+  const conv = await db.conversation.findOne({ _id: conversationId });
+
+  // Broadcast — only publishers a admin organizácie
+  if (conv.kind === 'broadcast') {
+    return participant.role === 'publisher' || await isOrgAdmin(user._id, conv.owningOrgId);
+  }
+
+  // Group / Direct — observer nemôže písať
+  if (participant.role === 'observer') return false;
+
+  // Default member, admin, publisher v group — môže
+  return ['member', 'admin', 'publisher'].includes(participant.role);
+}
+```
+
+### Test coverage
+
+Každý case z tejto matice musí mať testovací prípad. CI test job kontroluje, že žiadny prechod nezostane bez testu.
+
+## Otvorené otázky
+
+1. **Time-restricted broadcasts** — broadcast s časovým oknom (napr. *"otvorený 24h pre predikcie"*). Schéma to vie, ACL middleware bude TBD.
+2. **Threading v group** — momentálne `replyToMessageId` v ploškej štruktúre. Slack-style threadovanie zatiaľ nie. ACL na thread úrovni je TBD.
+3. **Cross-organization conversations** — konverzácia, ktorá patrí pod dva tenanty súčasne (napr. zápas medzi klubmi). Pre MVP: vlastnícka jedna organizácia, druhá strana cez explicit grants.
+
+## Nasleduje
+
+Pre ACL komentárov pokračuj v [matrix-comments](matrix-comments).
+Pre detail Courier subsystému pokračuj v [../features/courier](/features/courier).
+Pre detail rodičovského proxy pokračuj v [../features/parental-proxy](/features/parental-proxy).

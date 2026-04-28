@@ -1,0 +1,92 @@
+---
+title: activity — dokumentácia projektu
+---
+
+# activity
+
+**Platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom športe** — športovci, tréneri, rozhodcovia, lekári, fanúšikovia a podporovatelia v jednom systéme.
+
+Tento web obsahuje **kompletnú technickú a produktovú dokumentáciu** projektu **activity**. Dokumentácia je verejná, prístupná bez prihlásenia.
+
+> **activity** je klient projektu [sportup.sk](https://github.com/ltksolutions/sportup.sk) — využíva jeho registre osôb a organizácií ako autoritatívny zdroj a pridáva nad nimi aktivitnú a komunikačnú vrstvu.
+
+## Pre koho je dokumentácia
+
+- **Vývojári** — implementačné detaily, schémy, API, deployment
+- **Produktoví ľudia** — workflow per kategória používateľa, UI vzory
+- **Dizajnéri** — princípy, mockupy, prepojenie na doménový model
+- **Manažéri projektov** — prehľad architektúry, integrácia, otvorené otázky
+- **Auditori** — ACL matice, GDPR, retencia, security
+
+## Štruktúra
+
+Dokumentácia je organizovaná do siedmich vrstiev:
+
+### 1. Úvodná vrstva
+
+- [Prehľad](/overview) — kategórie používateľov, kľúčové entity, princípy
+- [Architektúra](/architecture) — technologický stack, MCP servery, multi-tenancy
+
+### 2. Doménová vrstva
+
+- [Doménový model](/domain-model) — Zod schémy, MongoDB indexy, kompletné dátové štruktúry
+
+### 3. Technická vrstva (API)
+
+- [MCP servery](/mcp-servers) — kompletná špecifikácia troch MCP serverov
+- [Integrácia s sportup.sk](/sportup-sk-integration) — väzba na ltksolutions/sportup.sk projekt
+
+### 4. Featurová vrstva
+
+- [Mentoring](/features/mentoring) — kompletný mentoring subsystém
+- [Courier](/features/courier) — chat a komunikácia
+- [Polymorfné komentáre](/features/activity-comments) — generický komentárový subsystém
+- [Rodičovský proxy](/features/parental-proxy) — zastupovanie maloletých
+
+### 5. ACL matice
+
+- [ACL pre komentáre](/acl/matrix-comments)
+- [ACL pre Courier](/acl/matrix-courier)
+
+### 6. Workflows per kategória používateľa
+
+- [Športovec](/workflows/athlete)
+- [Tréner](/workflows/coach)
+- [Rozhodca](/workflows/referee)
+- [Lekár, fyzio, mentálny kouč](/workflows/medical)
+- [Fanúšik](/workflows/fan)
+- [Podporovateľ](/workflows/supporter)
+
+### 7. Prevádzka a UI
+
+- [Deployment](/ops/deployment)
+- [Retencia a GDPR](/ops/retention-and-gdpr)
+- [Rate limity](/ops/rate-limits)
+- [Database migrations](/ops/migrations)
+- [Atlas Search](/ops/atlas-search)
+- [Dizajnové princípy](/ui/design-principles)
+- [UI Mockups](/ui/mockups)
+
+A na zaver:
+
+- [Slovník pojmov](/glossary) — referenčný slovník
+
+## Technologický stack
+
+- **MongoDB Atlas** — primárna databáza, native driver + Zod schémy
+- **Node.js + Fastify** — backend MCP servery
+- **Next.js 15** — frontend (web aplikácia, admin)
+- **MCP (Model Context Protocol)** — primárne API rozhranie
+- **Redis** — pub/sub, cache, rate limiting
+- **Vercel** — hosting Next.js apps
+- **Cloud Run / k8s** — hosting MCP serverov
+- **Cloudflare** — CDN a DDoS ochrana
+- **Caddy** — on-demand TLS pre custom domény organizácií
+
+## Verzia dokumentácie
+
+Táto dokumentácia popisuje **MVP fázu projektu**. Niektoré features sú označené ako TBD (To Be Done) — plánované pre budúce iterácie.
+
+## Otvorené otázky a feedback
+
+Otázky a poznámky k dokumentácii prosím zasielajte cez GitHub issues v projekte [ltksolutions/activity](https://github.com/ltksolutions/activity).

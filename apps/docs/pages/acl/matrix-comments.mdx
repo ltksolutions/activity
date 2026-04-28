@@ -1,0 +1,301 @@
+# ACL Matrix — ActivityComment
+
+Tento dokument je **referenčná tabuľka** prístupových práv pre komentáre pod jednotlivými typmi aktivít. Slúži pre vývojárov pri implementácii autorizačnej vrstvy a pre auditorov pri kontrole bezpečnostnej architektúry.
+
+## Princípy
+
+Predtým než pôjdeme na konkrétne tabuľky, treba zopakovať tri princípy, ktoré sa cez celú maticu tiahnú:
+
+**Tri vrstvy autorizácie, vyhodnocované v poradí:**
+
+1. **Privacy gate** — globálne tvrdé pravidlá (lekárske záznamy nemôže čítať ktokoľvek mimo zdravotnej role). Nemení sa na úrovni roly.
+2. **Role-based ACL** — táto matica. Default oprávnenia na základe vzťahu osoby k aktivite.
+3. **Explicit grant** — explicitne pridaný účastník (externý mentor, observer). Rozširuje ACL pre konkrétny záznam.
+
+**Operácie:**
+
+| Skratka | Význam |
+|---|---|
+| **R** | Read — čítať komentáre |
+| **W** | Write — písať vlastný komentár |
+| **E** | Edit/delete own — editovať a mazať vlastný komentár |
+| **M** | Moderate — mazať cudzie, banovať autorov |
+
+**Princíp "potrebnej blízkosti":** prístup má len osoba s aktívnym funkčným vzťahom k aktivite. *Aktívny* je kľúčové slovo — keď cyklus skončí, mentor stráca W/E na nové komentáre, ale R zostáva (audit). Keď tréner odíde z klubu, stráca prístup k tímovým komentárom v deň ukončenia kontraktu.
+
+## Mentoring session — `activityType: 'mentoring_session'`
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Mentor cyklu | ✓ | ✓ | ✓ | – |
+| Mentee cyklu | ✓ | ✓ | ✓ | – |
+| Externý mentor (priradený k cyklu) | ✓ | ✓ | ✓ | – |
+| Predseda komisie (org chair) | ✓ | – | – | – |
+| Admin organizácie | ✓ | – | – | ✓ |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- *Mentor* a *mentee* sú definovaní cez `MentoringCycle.mentorPersonId` a `menteePersonId`
+- *Externý mentor* je v `MentoringCycle.externalMentorIds` array
+- *Predseda komisie* je `OrganizationMember` s `role = 'commission_chair'` a aktívnym `endedAt: null` v rovnakej organizácii ako cyklus
+- Po prechode cyklu do `completed/terminated` všetci stratia **W** a **E**, ostáva len **R** (audit)
+
+## Medical treatment — `activityType: 'medical_treatment'`
+
+Citlivé záznamy. Privacy gate striktne obmedzuje prístup.
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Lekár — autor záznamu | ✓ | ✓ | ✓ | – |
+| Klubový lekár | ✓ | ✓ | ✓ | – |
+| Fyzio (s prepojeným ošetrením) | ✓ | ✓ | ✓ | – |
+| Športovec — subjekt záznamu | ✓ | ✓ | ✓ | – |
+| Rodič maloletého subjektu | ✓ (full) | ✓ | ✓ | – |
+| Tréner | – | – | – | – |
+| Admin organizácie | ✓ (audit only) | – | – | ✓ (blind) |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- *Klubový lekár* je `OrganizationMember` s `role = 'medical'` v klube športovca
+- *Rodič maloletého* — vidí kompletne (žiadne redigovanie, viď [features/parental-proxy](/features/parental-proxy))
+- *Audit only* pre admin organizácie znamená: každé otvorenie sa audit-loguje, nemôže editovať
+- *Blind moderation* — admin môže odstrániť záznam (napr. po nahlásení), ale obsah neuvidí
+- Tréner explicitne **nemá** prístup — zdravotné informácie nie sú jeho doménou
+
+## Training — `activityType: 'training'`
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Tréner — autor plánu | ✓ | ✓ | ✓ | ✓ |
+| Športovec — subjekt | ✓ | ✓ | ✓ | – |
+| Asistent trénera | ✓ | ✓ | ✓ | – |
+| Rodič maloletého | ✓ | ✓ | – | – |
+| Klubový manažér | ✓ | – | – | – |
+| Admin organizácie | ✓ | – | – | ✓ |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- *Asistent trénera* je `OrganizationMember` s `role = 'coach'` na rovnakom tíme/skupine
+- Rodič môže komentovať (napr. *"Adamko bude chýbať, je chorý"*), ale nemôže editovať existujúce komentáre — len mazať vlastné
+- Tréner ako autor má **M** — môže moderovať diskusiu pod svojím plánom
+
+## Match evaluation — `activityType: 'match_evaluation'`
+
+Hodnotenie zo zápasu (delegát hodnotí rozhodcu).
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Delegát — autor hodnotenia | ✓ | ✓ | ✓ | – |
+| Rozhodca — subjekt | ✓ | ✓ | ✓ | – |
+| Predseda komisie rozhodcov | ✓ | ✓ | – | – |
+| Mentor rozhodcu (cez aktívny cyklus) | ✓ | ✓ | – | – |
+| Admin organizácie | ✓ | – | – | ✓ |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- *Mentor rozhodcu* — ak má rozhodca aktívny mentoring cyklus, mentor vidí hodnotenia zo zápasov ako kontext
+
+## Education event — `activityType: 'education_event'`
+
+Vzdelávacie aktivity (kurzy, semináre, antidopingové školenia).
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Účastník | ✓ | ✓ | ✓ | – |
+| Lektor | ✓ | ✓ | ✓ | ✓ |
+| Vzdelávacia organizácia (admin) | ✓ | ✓ | – | ✓ |
+| Admin domácej organizácie účastníka | ✓ | – | – | – |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- Komentáre tu typicky obsahujú študijné materiály, otázky účastníkov, oznámenia od lektora
+
+## Donation — `activityType: 'donation'`
+
+Finančný dar od podporovateľa.
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Donor (podporovateľ) | ✓ | ✓ | ✓ | – |
+| Príjemca (športovec / klub / podujatie) | ✓ | ✓ | ✓ | – |
+| Admin recipient organizácie | ✓ | ✓ | – | ✓ |
+| Admin organizácie donora (ak je organizácia) | ✓ | – | – | – |
+| Účtovník (s rolou `finance`) | ✓ (audit) | – | – | – |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- Komentáre tu typicky obsahujú podávejú o použití daru, fotky vďaky, atď.
+- Pre transparentnosť sa donor môže rozhodnúť, či sú komentáre **verejne viditeľné** (širšia ACL ako tu) — toto je flag na úrovni samotného donation záznamu
+
+## Sponsorship activation — `activityType: 'sponsorship_activation'`
+
+Sponzorská aktivácia (kampaň, content, eventy).
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Sponzor — autor aktivácie | ✓ | ✓ | ✓ | ✓ |
+| Sponzorovaná osoba/klub | ✓ | ✓ | ✓ | – |
+| Marketingový tím sponzora | ✓ | ✓ | ✓ | – |
+| Admin recipient organizácie | ✓ | ✓ | – | – |
+| Iný | – | – | – | – |
+
+## Fan interaction — `activityType: 'fan_interaction'`
+
+Fanúšikovské hlasovanie, predikcia, návšteva podujatia.
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Fanúšik — autor interakcie | ✓ | ✓ | ✓ | – |
+| Iní fanúšikovia (verejné aktivity) | ✓ | ✓ | – | – |
+| Klub / športovec — subjekt | ✓ | ✓ | – | – |
+| Media manager | ✓ | ✓ | – | ✓ |
+| Admin organizácie | ✓ | – | – | ✓ |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- Toto je jediný typ aktivity, kde má **R** širšia verejnosť (iní fanúšikovia)
+- Príklad: hlasovanie *"Hráč zápasu"* — všetci fanúšikovia vidia hlasovanie, môžu pridávať komentáre
+- Moderation je dôležitá — média manager musí vedieť rýchlo mazať urážlivé komentáre
+
+## Antidopingový záznam — `activityType: 'antidoping_record'`
+
+Antidopingové záznamy (whereabouts, testy, výsledky).
+
+| Rola | R | W | E | M |
+|---|---|---|---|---|
+| Športovec — subjekt | ✓ | ✓ | ✓ | – |
+| Antidoping officer | ✓ | ✓ | ✓ | – |
+| Klubový lekár | ✓ | – | – | – |
+| Rodič maloletého | ✓ | ✓ | – | – |
+| Admin organizácie | ✓ (audit) | – | – | – |
+| Iný | – | – | – | – |
+
+### Poznámky
+
+- **Najprísnejšia ACL** zo všetkých typov aktivít — antidoping má regulačné dôsledky pre kariéru
+- Žiadny *moderation override* — admin nemôže záznam mazať
+- Iba antidoping officer ako *autorita* môže záznam editovať
+
+## Globálne pravidlá
+
+### Vyprchávanie prístupu
+
+Tieto pravidlá platia naprieč všetkými typmi aktivít:
+
+| Stav | Účinok |
+|---|---|
+| Aktivita má `deletedAt: null` | aktívna ACL podľa matice |
+| Aktivita má `deletedAt: <timestamp>` | len **R** (audit) pre admin organizácie + autora |
+| Cyklus mentora skončil (`completed/terminated`) | mentor stráca **W/E** na komentáre, **R** zostáva |
+| Tréner odišiel z klubu (`endedAt < now`) | tréner stráca **R/W/E** v deň odchodu |
+| Rodič — dieťa dovŕšilo plnoletosť | rodič stráca proxy a všetky práva po 30 dňoch |
+| Externý mentor — priradenie skončilo | rovnako ako mentor cyklu |
+
+### Self-protection (GDPR)
+
+Každý subjekt má právo vidieť všetko, čo o ňom systém eviduje. **Ale** nie cez živý ACL prístup — cez samostatný *data export* kanál. Toto pravidlo má dôsledok:
+
+- Dieťa po dosiahnutí plnoletosti **nemá** retroaktívny prístup k tímovým chatom z detstva
+- Dieťa **má** právo na export svojich vlastných správ a komentárov, plus tých, ktoré sú adresne o ňom (mentioned)
+- Toto sa rieši cez `data-export` endpoint, nie cez ACL matrix
+
+### Moderation override
+
+Operácia **M** (mazať cudzie) je k dispozícii admin organizácie aj v aktivitách, kde nemá **R** (lekárske, antidoping). To je *blind moderation*:
+
+- Na základe nahláseného porušenia môže admin záznam *odstrániť*, ale obsah neuvidí
+- Audit log zaznamenáva moderation akciu s reason field
+- UI musí jasne oddeliť — nezobrazí obsah pri *"Moderátorský pohľad"*
+
+### Mentions a ACL gate
+
+Komentár môže obsahovať `@mention`. Mention spustí dodatočnú kontrolu:
+
+1. Ak má mentioned osoba **R** na danú aktivitu → dostane notifikáciu
+2. Ak nemá → mention je *neúčinný* — mentioned nedostane nič, autor dostane subtle hint
+
+## Implementácia
+
+### ACL pravidlá v kóde
+
+ACL pravidlá žijú ako **konfiguračné štruktúry**, nie ako rozsiahly kód. Pre každý typ aktivity samostatný handler:
+
+```typescript
+// activities/medicalTreatment/acl.ts
+export const medicalTreatmentAcl: ActivityAclHandler = {
+  canRead: async (user, activityId) => {
+    const treatment = await db.medicalTreatment.findOne({ _id: activityId });
+    if (!treatment) return false;
+
+    // 1. Subjekt
+    if (treatment.personId.equals(user._id)) return true;
+
+    // 2. Autor (lekár)
+    if (treatment.recordedByPersonId.equals(user._id)) return true;
+
+    // 3. Klubový lekár
+    if (await isMedicalInClub(user._id, treatment.personId)) return true;
+
+    // 4. Rodič maloletého
+    if (await isParentOf(user._id, treatment.personId)) return true;
+
+    // 5. Admin (audit only — log access)
+    if (await isOrgAdmin(user._id, treatment.tenantId)) {
+      await auditLog.write({ /* read access by admin */ });
+      return true;
+    }
+
+    return false;
+  },
+  canWrite: async (user, activityId) => { /* podobné */ },
+  // ...
+};
+```
+
+Centrálny `ActivityRegistry` mapuje `activityType` na ACL handler.
+
+### Testovanie
+
+Každé ACL pravidlo má vlastný testovací súbor s **každou bunkou matice ako test case**:
+
+```typescript
+describe('medicalTreatmentAcl', () => {
+  it('mentor cyklu nemá prístup k lekárskemu záznamu mentee', async () => {
+    const result = await medicalTreatmentAcl.canRead(mentor, treatmentOfMentee);
+    expect(result).toBe(false);
+  });
+
+  it('rodič maloletého má kompletný prístup k lekárskemu záznamu dieťaťa', async () => {
+    const result = await medicalTreatmentAcl.canRead(parent, treatmentOfMinor);
+    expect(result).toBe(true);
+  });
+
+  // ...
+});
+```
+
+Tieto testy musia behať na CI pri každom merge — žiadna autorizačná zmena nesmie prejsť bez nich.
+
+### Audit pre kontrolnú vrstvu
+
+Pravidelný (mesačný) report: kto, kedy, čo čítal v citlivých kategoriách. Príjemcovia: bezpečnostný tím, právne oddelenie. Audit log v `auditLog` collection.
+
+## Otvorené otázky
+
+1. **Granularita** — momentálne sú pravidlá *coarse-grained* (čítaš všetko alebo nič). Niekedy by mohli byť potrebné polia v aktivite, ku ktorým má prístup len úzky kruh (napr. v hodnotení trénerom je *"hodnotenie disciplíny"* len pre admin trénerov). Pre MVP držíme coarse-grained, neskôr zvážime field-level ACL.
+
+2. **Cross-tenant prístup** — čo ak slovenský zväzu chce vidieť hodnotenia rozhodcu z českej súťaže? Toto je explicitne *cross-tenant*, vyžaduje samostatný flow s povoleniami od oboch tenantov. MVP: nepodporované.
+
+3. **Time-based ACL** — niektoré pravidlá by mohli mať časové okná (napr. *"sponzorský report viditeľný 30 dní po aktivácii"*). Schéma to podporí cez TTL, ale implementácia v ACL middleware-i je TBD.
+
+## Nasleduje
+
+Pre Courier ACL pokračuj v [matrix-courier](matrix-courier).
+Pre detail jednotlivých modulov pokračuj v [../features/](/features/).

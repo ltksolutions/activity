@@ -1,0 +1,127 @@
+# activity — prehľad
+
+Tento dokument je vstupným bodom do dokumentácie. Vysvetľuje, čo je projekt **activity**, z akých kúskov sa skladá, ako spolu komunikujú a kde nájdeš detaily.
+
+## Čo je activity
+
+**activity** je platforma pre slovenský šport — od evidencie aktivít športovcov a športových odborníkov, cez mentoring, komunikáciu, až po prepojenie fanúšikov a podporovateľov. Beží pod doménou `activity.sportup.sk` ako súčasť širšieho ekosystému projektu [sportup.sk](https://github.com/ltksolutions/sportup.sk).
+
+### Vzťah k projektu sportup.sk
+
+activity je **klient projektu sportup.sk**, nie jeho súčasť. Rozdelenie zodpovedností:
+
+| Projekt | Doména | Zodpovednosť |
+|---|---|---|
+| **sportup.sk** | `sportup.sk` | Autoritatívne registre osôb a organizácií, číselníky slovenského športu |
+| **activity** | `activity.sportup.sk` | Aktivity, mentoring, komunikácia, fanúšikovské funkcie |
+
+activity neduplikuje identitné dáta (osoby, organizácie) — číta ich z sportup.sk cez integráciu. Detaily v [Integrácia s sportup.sk](sportup-sk-integration).
+
+Cieľom systému activity je **jedno miesto pre celý životný cyklus** osoby v športe: keď sa niekto stane športovcom, trénerom, rozhodcom alebo lekárom, jeho profesijná história, vzdelávanie, licencie, výsledky a vzťahy v komunite žijú tu. Fanúšikovia majú miesto, kde sledovať svojich obľúbených športovcov a podujatia. Podporovatelia majú miesto, kde transparentne prispievať a vidieť výsledok.
+
+## Architektúra v skratke
+
+Systém má tri logické vrstvy:
+
+**Registre (registry-mcp)** — lokálny mirror autoritatívnych dát z sportup.sk + naše vlastné rozšírenia (licencie, organizačná štruktúra, custom domény). Mení sa zriedka, číta sa veľa.
+
+**Aktivity (activity-mcp)** — všetko, čo sa deje. Tréningy, zápasy, lekárske ošetrenia, mentoringové sedenia, vzdelávanie, finančná podpora, fanúšikovské interakcie. Vysoká frekvencia zápisov, časová os, väzby na osoby cez ID z registrov.
+
+**Komunikácia (courier-mcp)** — chat 1:1 a skupinové konverzácie naprieč všetkými rolami. Mentor s mentee, tréner s tímom, klub s rodičmi, zväz s licencovanými členmi. Vlastný subsystém s vlastnou retenciou, šifrovaním a prístupovými pravidlami.
+
+Tieto tri vrstvy sú implementované ako tri **MCP servery** (Model Context Protocol). MCP je štandardný protokol, ktorý umožňuje, aby s nimi komunikovali nielen naše vlastné aplikácie, ale aj AI agenti a externé integrácie — bez toho, aby sme museli pre každého písať vlastné REST endpointy.
+
+Nad týmito tromi servermi žijú dve používateľské rozhrania:
+
+- `activity.sportup.sk` — webová aplikácia pre všetky bežné role (športovec, odborník, fanúšik, podporovateľ)
+- `admin.activity.sportup.sk` — administračné rozhranie pre operátorov organizácií
+
+Detaily architektúry sú v dokumente [Architektúra](architecture).
+
+## Kategórie používateľov
+
+Systém pozná štyri základné kategórie osôb. Jedna fyzická osoba môže byť v niekoľkých kategóriách súčasne — bývalý profesionálny športovec môže byť teraz tréner aj podporovateľ.
+
+**Športovci** — od amatérov po profesionálov. Evidujú si tréning, zápasy, výsledky, zdravie, licencie, finančné toky.
+
+**Športoví odborníci** — tréneri, rozhodcovia, lekári, fyzioterapeuti, kondiční tréneri, mentálni kouči, výživoví poradcovia. Majú svoju licenciu, vzdelávanie, evidenciu odpracovaných hodín, mentoring.
+
+**Fanúšikovia** — sledujú obľúbených športovcov, kluby, súťaže. Plánujú návštevy podujatí, hlasujú v anketách, hrajú fantasy ligy.
+
+**Podporovatelia** — sponzori, mecenáši, rodičia, bývalí športovci. Prispievajú finančne, materiálne alebo expertízou. Vidia, kam ich príspevok ide a aký má dopad.
+
+Detailný popis aktivít každej kategórie je v adresári [workflows/](workflows/).
+
+## Vzťah k projektu sportup.sk
+
+Existujúci open-source projekt [ltksolutions/sportup.sk](https://github.com/ltksolutions/sportup.sk) poskytuje základné registre fyzických a právnických osôb v slovenskom športe. Náš systém sa naňho **napája** ako klient — využíva jeho dáta cez API, neduplikuje ich.
+
+Kde sportup.sk projekt poskytuje:
+- evidencia fyzických osôb v športe
+- evidencia právnických osôb (kluby, zväzy)
+- národné číselníky (športy, kategórie, regióny)
+
+Tam náš systém pridáva:
+- aktivity (čo robia)
+- mentoring
+- komunikáciu (Courier)
+- fanúšikovské a podporovateľské funkcie
+- multi-tenancy s custom doménami pre veľké organizácie
+
+Detaily integrácie sú v [sportup-sk-integration](sportup-sk-integration).
+
+## Princípy, ktoré sa tiahnu cez celý systém
+
+**Privacy by default.** Lekárske záznamy sú prístupné len zdravotníkom a samotnému športovcovi. Mentoringové komentáre vidí mentor, mentee a explicitne pridaní pozorovatelia. Direct chat 1:1 je end-to-end šifrovaný. Audit log loguje každý prístup k citlivým záznamom.
+
+**Polymorfné komentáre.** Pod ktoroukoľvek aktivitou (mentoringové sedenie, lekárske ošetrenie, hodnotenie zo zápasu) sa dá viesť diskusia. Implementačne je to jeden subsystém, nie desať paralelných.
+
+**Generický Courier.** Chat nie je viazaný na konkrétny modul — slúži pre mentoring, tréner-športovec, klubové skupiny, rodičovské konverzácie, broadcast oznamy. Kto má funkčný vzťah, môže komunikovať.
+
+**Proxy účastníctvo pre maloletých.** Rodič v tímovom chate U13 vystupuje ako *zástupca svojho dieťaťa* — vidí všetko, píše pod svojím menom s jasným označením. Vekový prah, kedy dieťa vstupuje samostatne, sa parametrizuje per organizácia.
+
+**Multi-tenancy.** Systém je multi-tenantový — každá organizácia (klub, zväz) má svoj subdomain (`sfz.activity.sportup.sk`). Veľké organizácie môžu používať vlastnú custom doménu cez CNAME (`clenovia.futbalsfz.sk`).
+
+**Multi-language.** Systémové texty a číselníky sú v SK, CS, EN. Default jazyk je EN s fallbackom podľa profilu používateľa alebo Accept-Language headeru. Užívateľský obsah (vlastné správy, komentáre, hodnotenia) zostáva v jazyku autora.
+
+**Kontinuálna auditovateľnosť.** Záznamy sa nemažú; pri editácii sa vytvára audit záznam. Vypršanie retencie je riadené per organizácia, citlivé záznamy (zdravotnícke, mentoringové hodnotenia) majú dlhšie retencie pre účely auditu.
+
+## Doménové koncepty, ktoré sa oplatí poznať
+
+Pri čítaní zvyšku dokumentácie ti pomôže poznať tieto pojmy. Plný glosár je v [glossary](glossary).
+
+**Person** — fyzická osoba v systéme, atomárny záznam identity. Môže mať viacero rolí (športovec aj tréner súčasne).
+
+**Organization** — právnická osoba alebo organizačná jednotka — klub, zväz, komisia, vzdelávacia organizácia.
+
+**Activity** — generický pojem pre čokoľvek, čo sa eviduje v čase: tréning, zápas, mentoringové sedenie, lekárske ošetrenie, dar, vzdelávanie, fanúšikovská interakcia. Polymorfný — všetky typy zdieľajú spoločnú kostru a polymorfné komentáre.
+
+**MentoringCycle** — kontainer, *nie* aktivita. Dlhodobý vzťah mentor-mentee, ktorý zoskupuje viaceré sedenia. Cyklov môže byť pre jedného mentee viacero (sekvenčne aj paralelne s rôznymi mentormi).
+
+**MentoringSession** — typ aktivity (`activityType: 'mentoring_session'`). Jeden konkrétny vyplnený formulár o mentoringu. Vypĺňa ho vždy mentor. Žije pod konkrétnym `MentoringCycle`.
+
+**Conversation** — chatová konverzácia v Courier. Typy: `direct` (1:1, E2E šifrované), `group` (3+, server-side šifrované), `broadcast` (málo publisherov, veľa subscriberov).
+
+**ParticipantType** — `direct` (sám za seba), `proxy_for_minor` (rodič zastupujúci dieťa), `staff` (tréner, lekár, manažér), `observer` (read-only).
+
+**ActivityComment** — polymorfný komentár pod hocijakou aktivitou.
+
+## Stav dokumentácie
+
+Dokumentácia je rozdelená do tematických sekcií:
+
+| Sekcia | Obsahuje |
+|---|---|
+| `overview.mdx` | tento dokument |
+| `architecture.mdx` | systémová architektúra, MCP, deployment |
+| `domain-model.mdx` | entity, vzťahy, ER diagramy |
+| `mcp-servers.mdx` | API špecifikácia troch MCP serverov |
+| `sportup-sk-integration.mdx` | väzba na ltksolutions/sportup.sk |
+| `workflows/` | detailné workflow per kategória používateľa |
+| `features/` | špecifické moduly (mentoring, courier, komentáre, proxy) |
+| `acl/` | matice prístupových práv |
+| `ui/` | dizajnové princípy, kľúčové obrazovky |
+| `ops/` | retencia, GDPR, deployment, monitoring |
+| `glossary.mdx` | pojmy, skratky, role |
+
+Dokumenty sa odkazujú navzájom cez Nextra route-y. Pri čítaní zdroja na GitHube nájdeš ich pôvodný markdown content v `apps/docs/pages/`.

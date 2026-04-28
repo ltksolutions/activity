@@ -1,0 +1,371 @@
+# Workflow — Podporovateľ
+
+Tento dokument popisuje životný cyklus **podporovateľa** v systéme — širokej kategórie zahŕňajúcej sponzorov, mecenášov, rodičov ako finančných podporovateľov, a darcov 2% z dane. Spoločným menovateľom je **finančné alebo materiálne prispievanie** k slovenskému športu.
+
+## Životný cyklus
+
+```
+Záujem prispieť ──── (môže byť rodič, firma, jednotlivec, právnická osoba)
+    │
+    ▼
+Registrácia (osobná alebo firemná)
+    │
+    ├──► Sponzor (firma) ──── zmluva s klubom / športovcom / podujatím
+    │
+    ├──► Mecenáš (jednotlivec) ──── pravidelná podpora bez zmluvy
+    │
+    ├──► Rodič ako podporovateľ ──── financovanie kariéry vlastného dieťaťa
+    │
+    ├──► Darca 2% dane ──── jednorazový alebo opakovaný transfer
+    │
+    └──► Crowdfunding prispievateľ ──── menšie príspevky cez kampane
+
+       Ukončenie: Zánik zmluvy, odhlásenie zo systému, GDPR delete
+```
+
+## Stupne podpory
+
+Systém rozlišuje rôzne stupne podpory s rôznymi funkciami:
+
+### Jednorazový darca
+
+- Príspevok pri jednom podujatí, kampani, alebo cez 2% dane
+- Bez priebežnej angažovanosti
+- Minimum údajov v systéme
+
+### Pravidelný darca / mecenáš
+
+- Pravidelné príspevky (mesačne, ročne)
+- Self-service profil v aplikácii
+- Notifikácie o použití daru, výsledkoch športovca
+
+### Sponzor (typicky firma)
+
+- Zmluvný vzťah s klubom alebo športovcom
+- Brand visibility (logo, banneri)
+- Sponzorské aktivácie (kampane, content)
+- Detailný reporting
+
+### Mecenáš (vysoká úroveň)
+
+- Strategický long-term podporovateľ
+- Personálny vzťah s klubom / športovcom
+- Možnosť priameho zapojenia (consultancy, mentorship)
+
+### Rodič ako podporovateľ
+
+- Špecifický prípad — rodič financuje kariéru vlastného dieťaťa
+- Kombinuje sa s rolou *parent* (proxy pre maloletého)
+
+## Registrácia
+
+### Fyzická osoba
+
+1. Self-registration cez aplikáciu
+2. `Person` so `primaryRole: 'supporter'`
+3. Voliteľné pridanie firemných údajov (ak prispieva ako SZČO)
+
+### Právnická osoba
+
+1. Registrácia cez admin firmy
+2. Vznikne `Organization` s `type: 'sponsor'`
+3. Reprezentanti firmy (CEO, marketing, kontakt) sú `OrganizationMember` v tej organizácii
+4. Komunikácia smerom k podporovaným sa deje **menom organizácie**, nie konkrétnej osoby
+
+### Anonymní darcovia
+
+Niektoré dary môžu byť **anonymné voči verejnosti** — meno darcu v systéme zostáva, ale nie je publikované. Toto je flag na úrovni `Donation`.
+
+## Hlavné aktivity
+
+### `donation` — Finančný dar
+
+Najdôležitejšia aktivita podporovateľa:
+
+```
+Donation {
+  donorPersonId: ObjectId | null,
+  donorOrganizationId: ObjectId | null,  // jeden z dvoch
+  recipientType: 'person' | 'organization' | 'event' | 'campaign',
+  recipientId,
+  amount: number,
+  currency: 'EUR',
+  donationType: 'one_time' | 'recurring' | 'two_percent_tax' | 'in_kind',
+  purpose: <text>,
+  publiclyVisible: boolean,  // anonymný vs verejný
+  taxDeductible: boolean,
+  // Pre opakované dary
+  recurrenceConfig?: { frequency: 'monthly' | 'quarterly' | 'yearly', endDate },
+  // Pre 2% dane
+  taxYear?: number,
+  // Pre in-kind (materiálny dar)
+  inKindDescription?: <text>,
+  estimatedValue?: number,
+  occurredAt,
+}
+```
+
+#### Príklady
+
+**Pravidelný dar:**
+```
+{
+  donorPersonId: <Anna Nováková>,
+  recipientType: 'person',
+  recipientId: <Tomáš, mladý rozhodca>,
+  amount: 50,
+  currency: 'EUR',
+  donationType: 'recurring',
+  purpose: 'Sústredenia',
+  publiclyVisible: false,
+  recurrenceConfig: { frequency: 'monthly', endDate: null },
+}
+```
+
+**Sponzorský dar firme klubu:**
+```
+{
+  donorOrganizationId: <Slovak Sport Brand s.r.o.>,
+  recipientType: 'organization',
+  recipientId: <ŠK Slovan U13>,
+  amount: 5000,
+  currency: 'EUR',
+  donationType: 'one_time',
+  purpose: 'Sezónne dresy',
+  publiclyVisible: true,
+}
+```
+
+**2% z dane:**
+```
+{
+  donorPersonId: <darca>,
+  recipientType: 'organization',
+  recipientId: <oprávnený športový subjekt>,
+  amount: 250,
+  donationType: 'two_percent_tax',
+  taxYear: 2025,
+  taxDeductible: true,
+}
+```
+
+### `sponsorship_activation` — Sponzorská aktivácia
+
+Sponzor robí kampaň alebo content na podporu svojej značky:
+
+```
+SponsorshipActivation {
+  sponsorOrgId,
+  sponsoredEntity: { type: 'person' | 'team' | 'event', id },
+  occurredAt, durationMinutes,
+  activationType: 'social_media_post' | 'event_appearance' | 'content_creation' | 'product_placement',
+  reach: <number>,  // ak je merateľný
+  description: <text>,
+  attachments: [...],  // banneri, fotky, kreatívy
+}
+```
+
+ACL: sponzor + sponzorovaný + ich admin organizácie. Detaily v [../acl/matrix-comments](/acl/matrix-comments).
+
+### Komentáre pod aktivitami
+
+Podporovateľ môže komentovať pod aktivitami, ktoré priamo podporuje:
+
+| Aktivita | Podporovateľ R | Podporovateľ W |
+|---|---|---|
+| Vlastný `donation` | ✓ | ✓ |
+| `match_participation` sponzorovaného športovca | ✓ | ✓ |
+| `mentoring_session` | – | – |
+| `medical_treatment` | – | – |
+
+## Komunikácia
+
+### Cez klub ako sprostredkovateľa
+
+Z dohody: **podporovateľ NEpíše priamo s športovcom** (ochrana proti spamu a manipulácii). Komunikácia ide cez klub:
+
+1. Sponzor chce kontaktovať športovca → píše klubovému manažérovi
+2. Klub buď preposiela správu (s vedomím športovca), alebo dohodne priamy kontakt
+
+Výnimky:
+- Pri **mecenášoch s long-term vzťahom** môže klub schváliť priamu komunikáciu
+- Pri **rodičoch ako podporovateľoch** je komunikácia v rámci rodinného vzťahu prirodzená
+
+### Sponzor ↔ klub
+
+`direct` konverzácia medzi reprezentantom sponzora a klubovým manažérom. Štandardná direct konverzácia s plnou funkcionalitou.
+
+### Broadcast od podporovaných smer na podporovateľov
+
+Klub / športovec môže mať `broadcast` konverzáciu pre svojich podporovateľov:
+
+- Updates o použití darov
+- Foto/video reporty z aktivít
+- Pozvania na podujatia
+- Poďakovania
+
+## Špeciálne workflowy
+
+### 2% z dane
+
+Slovenský zákon umožňuje fyzickým a právnickým osobám rozdeliť 2% (rep. 3% pri dobrovoľníctve) z odvedenej dane určenému subjektu. Pre šport je to dôležitý zdroj.
+
+V systéme:
+
+1. Oprávnený športový subjekt sa registruje v Notárskej komore (mimo systému) — výsledkom je zápis v zozname prijímateľov 2%
+2. V systéme má `Organization.twoPercentEligible: true` a `Organization.twoPercentRegistrationNumber: '...'`
+3. Darca v profile zvolí *"Vyhlásenie o poukázaní 2%"* a vyplní formulár
+4. Vznikne `Donation` so `donationType: 'two_percent_tax'`
+5. Po prijatí prostriedkov klubom (cez daňový úrad) sa donation eviduje s `confirmed: true`
+
+### Crowdfunding kampaň
+
+Klub alebo športovec spustí kampaň na konkrétny účel (napr. nový vybavený fitnesscentrum, rehabilitácia po zranení). V systéme:
+
+1. Vznikne `CrowdfundingCampaign` (TBD, mimo MVP) s cieľom, opisom, deadlinom
+2. Podporovateľ prispieva cez `Donation` so `donationType: 'one_time'`, naviazanú na kampaň
+3. Verejne viditeľný progress
+
+### Rodič financuje kariéru dieťaťa
+
+Špecifický prípad. Rodič:
+
+- Má `OrganizationMember(role: 'parent')` cez `ParentalAccess`
+- Súčasne robí `Donation` so `recipientType: 'person'` a `recipientId: <vlastné dieťa>`
+- Tieto dary sú typicky `publiclyVisible: false` (osobné rodinné financovanie)
+- Použité napríklad na: sústredenia, vybavenie, cestovné
+
+## Postup angažovanosti
+
+Podporovateľ môže časom prechádzať medzi stupňami:
+
+1. Začne ako jednorazový darca cez 2% z dane
+2. Po pozitívnej skúsenosti sa stane pravidelným mecenášom
+3. Pri silnej zaangažovanosti môže prejsť na sponzorskú zmluvu (ak je firma)
+4. Pri dlhodobej spolupráci sa stáva strategickým partnerom
+
+V systéme je toto progresia cez:
+- Pridanie nových `Donation` aktivít s vyššími sumami
+- Vznik formálnej zmluvy (`SponsorshipContract`, TBD)
+- Pridanie `OrganizationMember` ako *strategic_partner*
+
+## Reporty a štatistiky
+
+### Pre podporovateľa
+
+Personálny / firemný dashboard:
+
+- Vlastné dary (suma, frekvencia, recipientov)
+- Vplyv (čo sa za moje peniaze dosiahlo) — TBD vyžaduje doménový tracking
+- Sponzorské aktivácie (engagement metriky)
+- Pripravované kampane na podporu
+
+### Pre klub / športovca
+
+Reporting o získanej podpore:
+
+- Celkové prijaté dary (per obdobie)
+- Počet darcov, frekvencia
+- Sponzori a ich aktivácie
+- Použitie daru (transparency report)
+
+### Pre verejnosť
+
+Pri verejných daroch:
+
+- Top sponzori (s explicitným súhlasom)
+- Aktívne crowdfunding kampane
+- Transparency reporty
+
+### Pre regulátora
+
+Pre 2% dane: oficiálne reporty pre Notárska komoru, Daňový úrad. TBD interface (mimo MVP).
+
+## ACL pre podporovateľa
+
+Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
+
+| Aktivita | Vlastný `donation` | Cudzí `donation` | `sponsorship_activation` (vlastná) | `match_participation` sponzorovaného |
+|---|---|---|---|---|
+| R | ✓ | ✓ (ak verejné) | ✓ | ✓ |
+| W | ✓ | – | ✓ | ✓ (komentáre) |
+| E | ✓ | – | ✓ | – |
+
+## UI obrazovky
+
+### Dashboard podporovateľa
+
+**Obsahuje:**
+- Aktívne dary a sponzorstvá
+- Najnovšie updates od podporovaných
+- Pripravované kampane
+- Tax-related notifikácie (potvrdenia o daroch)
+
+### Profil podporovaného (z perspektívy podporovateľa)
+
+**Obsahuje:**
+- Štatistiky kariéry
+- Najnovšie aktivity (verejné)
+- Aktívne kampane na podporu
+- Tlačidlo *"Prispieť"*
+- Tlačidlo *"Stať sa pravidelným podporovateľom"*
+
+### Vytvorenie daru
+
+**Obsahuje:**
+- Selektor recipienta (osoba / klub / podujatie / kampaň)
+- Suma a mena
+- Typ daru (jednorazový / pravidelný / 2% z dane / in-kind)
+- Účel
+- Verejnosť (verejný vs anonymný)
+- Platobná metóda (bank transfer, card, …)
+- Tax-deductible flag
+
+### Detail vlastného daru
+
+**Obsahuje:**
+- Detaily transakcie
+- Stav (pending / confirmed / used)
+- Reportovanie použitia (ak recipient zdieľa)
+- Poďakovania a komentáre
+- Tax certificate (pdf na stiahnutie)
+
+### Detail sponzorskej aktivácie
+
+Pre sponzorov, ktorí robia kampane:
+
+- Plánovanie aktivácie (čo, kedy, kde, koho)
+- Reach a engagement metriky
+- Asset library (banneri, kreatívy)
+- Komentárová diskusia s tímom
+
+## Notifikácie pre podporovateľa
+
+| Udalosť | Notifikácia |
+|---|---|
+| Potvrdenie prijatia daru | email |
+| Tax certificate vystavený | email s prílohou |
+| Update od podporovaného (v broadcast) | email digest |
+| Recipient dosiahol cieľ kampane | email + push |
+| Pozvanie na podujatie (ako VIP) | email |
+| Nová sezóna/kampaň pre opakovaný dar | email |
+| Recipient ukončil kariéru / zmenil klub | email |
+
+## Otvorené otázky
+
+1. **Platobná integrácia** — pre MVP odpojené (manuálne potvrdzovanie darov), v ďalšej iterácii integrácia s platobným procesorom (TatraPay, GoPay, Stripe).
+
+2. **Tax certificates** — automatické generovanie potvrdení pre účtovné účely. Vyžaduje právne overenie šablón.
+
+3. **Conflict of interest** — sponzor, ktorý je súčasne vlastníkom konkurenčného klubu? Kód musí kontrolovať a varovať. Out-of-scope pre MVP.
+
+4. **In-kind dary tracking** — materiálne dary (vybavenie, oblečenie) sa horšie kvantifikujú. Schéma to vie cez `donationType: 'in_kind'`, ale workflow pre evaluáciu hodnoty je TBD.
+
+5. **Anonymizovaná aggregated data pre verejnosť** — *"v roku 2026 priemerný klub dostal X eur"* bez identifikácie konkrétnych donorov. Vyžaduje aggregation pipeline.
+
+6. **Recurring donations failures** — keď sa pravidelná platba nepodarí, ako notifikovať. Vyžaduje payment processor integráciu.
+
+## Nasleduje
+
+Pre fanúšika pokračuj v [fan](fan).
+Pre profesionálne kategórie pokračuj v [athlete](athlete), [coach](coach), [referee](referee), [medical](medical).

@@ -1,0 +1,348 @@
+# Integrácia s ltksolutions/sportup.sk
+
+Tento dokument popisuje, ako náš systém spolupracuje s existujúcim open-source projektom [ltksolutions/sportup.sk](https://github.com/ltksolutions/sportup.sk). Pôvodný projekt poskytuje **základné registre a číselníky** pre slovenský šport. Náš systém ich využíva ako autoritatívny zdroj a pridáva k nim aktivitnú a komunikačnú vrstvu.
+
+## Princíp: prepojiteľnosť, nie duplikácia
+
+Existujúci sportup.sk projekt eviduje **kto je kto** v slovenskom športe — fyzické osoby, právnické osoby (kluby, zväzy), oficiálne číselníky (športy, regióny, kategórie). Naša pridaná hodnota je **čo sa s nimi deje** — aktivity, mentoring, komunikácia, fanúšikovské funkcie.
+
+Z toho vyplýva základné architektonické rozhodnutie: **náš systém je klient sportup.sk projektu**, nie konkurent. Identitné dáta neduplikujeme — čítame ich.
+
+```
+┌─────────────────────────────────┐
+│  ltksolutions/sportup.sk        │
+│  (existujúci projekt)            │
+│                                  │
+│  ─ FyzickaOsoba registry        │
+│  ─ PravnickaOsoba registry      │
+│  ─ Národné číselníky             │
+└────────────┬────────────────────┘
+             │
+             │ API integrácia
+             │ (read-mostly, periodic sync)
+             ▼
+┌─────────────────────────────────┐
+│  registry-mcp (náš systém)        │
+│                                  │
+│  ─ Person (lokálny mirror)      │
+│  ─ Organization (lokálny mirror)│
+│  ─ License, Membership          │
+│  ─ Custom domains, branding     │
+└────────────┬────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────┐
+│  activity-mcp, courier-mcp       │
+│  (aktivity a komunikácia)        │
+└─────────────────────────────────┘
+```
+
+## Tri možné integračné vzory
+
+Pri prepájaní s externým systémom máme tri primárne vzory. Každý má kompromisy.
+
+### Vzor 1: Pure pass-through (proxy)
+
+Náš systém pri každom dotaze volá ltksolutions API. Žiadne lokálne kópie.
+
+- **Plus:** vždy aktuálne dáta, žiadne synchronizačné problémy
+- **Mínus:** výkon (každé čítanie = HTTP volanie), dostupnosť (ich downtime = náš downtime), audit (nemáme historické snapshoty)
+
+**Záver:** nepoužiteľné pre náš objem a SLA.
+
+### Vzor 2: Full local mirror
+
+Periodicky stiahneme všetky dáta a žijeme z lokálnej kópie. Zápisy idú do oboch systémov, alebo len do jedného (master-slave).
+
+- **Plus:** rýchle čítanie, plná kontrola, audit
+- **Mínus:** synchronizácia je zložitá, conflict resolution, "kto je master?"
+
+**Záver:** ťažké, ale pre časť dát potrebné.
+
+### Vzor 3: Hybrid — selective mirror s reference linkom
+
+Niektoré dáta zrkadlíme lokálne (s pravidelnou synchronizáciou), iné len odkazujeme cez ID.
+
+- **Plus:** najlepšie z oboch svetov
+- **Mínus:** vyžaduje rozhodnutie pre každú entitu
+
+**Záver:** to ideme.
+
+## Mapovanie entít
+
+Toto je rozhodovacia matica per entita.
+
+| Entita | Vzor | Master | Periodicita sync | Poznámka |
+|---|---|---|---|---|
+| FyzickaOsoba ↔ Person | Mirror | Hybrid (viď nižšie) | Real-time webhook + nightly reconcile | Dôležité dáta, časté čítania |
+| PravnickaOsoba ↔ Organization | Mirror | sportup.sk pre oficiálne, my pre interné | Nightly | Naše custom domény a branding sú lokálne |
+| Sport (number číselník) | Mirror | sportup.sk | Týždenne | Veľmi stabilné, len občasné updaty |
+| Region (geografické členenie) | Mirror | sportup.sk | Týždenne | Veľmi stabilné |
+| Kategória športovca | Mirror | sportup.sk | Týždenne | |
+| Liga, súťaž | Mirror | sportup.sk | Denne | Nové sezóny pribúdajú |
+| Activity, MentoringCycle, Comment, ... | Local-only | my (samozrejme) | — | Nie je v sportup.sk |
+| Conversation, Message | Local-only | my | — | |
+
+### "Hybrid master" pre Person
+
+Toto je špecifický prípad. FyzickaOsoba v sportup.sk je oficiálny záznam (rodné číslo, identita). Náš Person má rovnaké jadro **plus** atribúty, ktoré v sportup.sk nemajú zmysel: preferovaný jazyk pre UI, custom voľby v aplikácii, historické vzťahy v Activity.app.
+
+Riešenie:
+
+- **Identitné polia** (firstName, lastName, birthDate, identifierNational, nationality) — master je sportup.sk. Pri rozdielnosti vyhráva sportup.sk, my updateneme.
+- **Aplikačné polia** (language, primaryRole vo *našom* systéme, preferences) — master sme my. Sportup.sk ich nepozná.
+- **Email / telefón** — komplikovanejšie. Sportup.sk môže mať oficiálny email registrovaný pri zväze; my môžeme mať pracovný email, ktorý si user nastavil v profile. Riešenie: **dve polia** v Person — `officialEmail` (mirror zo sportup.sk) a `preferredEmail` (lokálne).
+
+```typescript
+// Person v našej DB
+{
+  _id: ObjectId,
+  externalRefs: {
+    sportupSkId: "abc-123-def-456",   // ID v sportup.sk systéme
+    syncStatus: "synced" | "pending" | "conflict",
+    lastSyncedAt: Date,
+  },
+  // identitné (mirror)
+  firstName: "Tomáš",
+  lastName: "Vilček",
+  birthDate: ISODate(...),
+  identifierNational: "encrypted_via_csfle",
+  nationality: "SK",
+  officialEmail: "tomas.vilcek@sfz.sk",
+  // aplikačné (lokálne)
+  preferredEmail: "tomas@gmail.com",
+  language: "sk",
+  primaryRole: "professional",
+  // ...
+}
+```
+
+## Synchronizačná stratégia
+
+### Smer ltksolutions → naše
+
+#### Real-time updates cez webhooks
+
+Ak má sportup.sk webhook mechanizmus (alebo ho navrhneme tam ako pull request), dostávame okamžité notifikácie:
+
+```
+POST https://registry-mcp.activity.sportup.sk/webhooks/sportup-sk
+{
+  "event": "person.updated",
+  "personId": "abc-123",
+  "changedFields": ["lastName", "officialEmail"],
+  "timestamp": "2026-04-22T10:30:00Z",
+  "signature": "hmac-sha256:..."
+}
+```
+
+Náš sync handler:
+1. Validuje signature
+2. Stiahne aktuálny stav osoby z sportup.sk API
+3. Porovná s lokálnou kópiou
+4. Updateuje identitné polia, ponechá aplikačné
+5. Pri konflikte (napr. sme pridali email, oni tiež pridali iný) označí `syncStatus: 'conflict'` a pošle alert adminovi
+
+#### Nightly reconcile job
+
+Pre prípad zmeškaného webhook-u alebo hromadných úprav v sportup.sk:
+
+- 02:00 UTC každú noc
+- Stiahne všetky zmenené záznamy v sportup.sk od posledného sync-u (cez `?changedSince=...` query param)
+- Spustí rovnaký diff/merge proces ako webhook handler
+
+#### Initial backfill
+
+Pri prvom nasadení (alebo pri pridaní nového typu entity do mirror-u): jednorazový skript, ktorý stiahne všetky existujúce záznamy. Beží nightly, paginated, idempotentný.
+
+### Smer naše → ltksolutions
+
+Toto je delikátnejšie — nemôžme len tak prepisovať autoritatívne dáta.
+
+#### Návrhy zmien (proposals)
+
+Keď používateľ v našom systéme zmení identitný atribút (napr. zmena priezviska po sobáši), neukladáme rovno do `Person`. Vytvoríme **proposal**:
+
+```typescript
+// PersonChangeProposal collection (lokálne)
+{
+  _id: ObjectId,
+  personId: ObjectId,
+  proposedBy: ObjectId,
+  changes: { lastName: "Nová" },
+  evidence?: { documentUrl: "..." }, // sken sobášneho listu napr.
+  status: "pending" | "approved_locally" | "submitted" | "accepted" | "rejected",
+  externalSubmissionId?: string,    // ID návrhu v sportup.sk
+  createdAt: Date,
+}
+```
+
+Workflow:
+
+1. User zmení v našom UI svoje priezvisko a uploadne dôkaz
+2. Vytvoríme `PersonChangeProposal` so stavom `pending`
+3. Náš lokálny admin (alebo automatický validator) ho schváli (`approved_locally`)
+4. Submitneme do sportup.sk cez ich API (`submitted`)
+5. Po ich prijatí (`accepted`), webhook udalosť triggeruje finálny update v našom Person
+
+Pre čisto aplikačné polia (preferred language, accent farba pre admin org) nič takéto netreba — píšeme priamo do nášho Person/Organization.
+
+#### Vytváranie nových osôb
+
+Ak user na našom systéme zaregistruje úplne novú osobu (povedzme nový rozhodca, ktorý ešte nie je v žiadnom systéme), vzniká otázka, či má najprv ísť do sportup.sk a potom k nám, alebo naopak.
+
+**Návrh:**
+
+1. User zaregistruje v našom systéme s základnými údajmi
+2. Local-only Person vznikne so `syncStatus: 'pending_registration'`, neviditeľný pre väčšinu funkcií
+3. Submitneme do sportup.sk ako návrh nového záznamu
+4. Po ich akceptácii dostaneme externé ID, lokálne `syncStatus: 'synced'`, plné funkcie sa odomknú
+
+Tým rešpektujeme sportup.sk ako autoritu a zároveň user nie je odkázaný na ich vlastné prihlásenie.
+
+## API kontrakt s sportup.sk
+
+Toto je **návrh** kontraktu — predpokladáme, že prepracujeme ich existujúce API alebo prispejeme PR. Definitívna podoba sa dohodne s maintainermi projektu.
+
+### Endpointy, ktoré od nich potrebujeme
+
+```
+GET  /api/v1/persons/{id}                    — detail osoby
+GET  /api/v1/persons?changedSince=ISO        — incrementálne zmeny
+GET  /api/v1/persons?nationalIdentifier=...  — vyhľadanie podľa rodného čísla
+POST /api/v1/persons                          — návrh novej osoby
+PATCH /api/v1/persons/{id}                    — návrh zmeny osoby
+
+GET  /api/v1/organizations/{id}              — detail organizácie
+GET  /api/v1/organizations?changedSince=ISO
+POST /api/v1/organizations
+PATCH /api/v1/organizations/{id}
+
+GET  /api/v1/codelists/{name}                — číselník
+GET  /api/v1/codelists/{name}?changedSince=ISO
+```
+
+### Webhook udalosti
+
+```
+person.created
+person.updated
+person.deactivated
+organization.created
+organization.updated
+codelist.value_added
+codelist.value_modified
+codelist.value_deactivated
+```
+
+Všetky webhooky podpísané HMAC-SHA256 s shared secret-om.
+
+### Autentifikácia
+
+- API key per integrátor (my máme náš)
+- Rate limit per API key
+- Audit log na ich strane (kto čo sťahoval/upravoval)
+
+### Návrhy pre ich projekt (PR kandidáti)
+
+Toto sú zmeny, ktoré sa budú musieť do sportup.sk projektu doplniť — nie sú to "naše tajomstvá", sú to štandardné API praktiky:
+
+1. **`changedSince` query parameter** na list endpointoch (incremental sync)
+2. **Webhook notifikácie** pri zmenách (pre real-time sync)
+3. **HMAC podpisovanie** webhookov
+4. **Stable IDs** pre všetky entity (UUID alebo aspoň monotónne ID, nemenné v čase)
+5. **Bulk export endpoint** pre initial backfill (paginated, gzipped)
+
+Tieto zmeny prinesieme cez Pull Request do ich repa s explicitným odkazom na potreby tohto projektu.
+
+## Číselníky
+
+Číselníky v sportup.sk (športy, regióny, kategórie) sú primárne autoritatívne. Náš systém ich zrkadlí do `codelist` a `codelistValue` collections (viď [domain-model](domain-model)).
+
+### Lokálne rozšírenia
+
+Niektoré naše číselníky **neexistujú** v sportup.sk a sú čisto naše:
+
+- `mentoring_session_topic` (témy mentoringu)
+- `referee_competencies` (kompetenčné tagy pre rozhodcov)
+- `coach_competencies`, `physio_competencies`, ...
+
+Tieto majú v `codelist` collection `name` s prefixom alebo flag `isLocal: true`. Pri sync-u ich preskakujeme.
+
+### Custom hodnoty per organizácia
+
+Niektoré organizácie môžu chcieť pridať vlastné kompetenčné tagy alebo iné rozšírenia. Pre to máme `codelistValue.isCustom: true` + `customForOrgId`. Tieto sú izolované per tenant a do sportup.sk sa nesynchronizujú.
+
+## Migračná stratégia
+
+Predpokladáme, že systém nasadzujeme do prostredia, kde sportup.sk projekt už beží alebo bude v určitej fáze.
+
+### Fáza 0 — sportup.sk neexistuje produkčne
+
+Náš systém funguje aj samostatne. `Person` a `Organization` sú lokálne autoritatívne. `externalRefs.sportupSkId` je `null`. Synchronizácia je vypnutá.
+
+### Fáza 1 — sportup.sk existuje, my sa pripájame
+
+1. Spustíme initial backfill (stiahneme všetky existujúce osoby, organizácie, číselníky)
+2. Pre každý nový lokálny záznam, ktorý zhodu nájdeme (po identifikátoroch), uložíme `externalRefs.sportupSkId`
+3. Pre nezhody — proposal flow alebo manuálne riešenie cez admin
+4. Zapneme webhooks a nightly reconcile
+
+### Fáza 2 — beh
+
+Štandardná integrácia, ktorú popisuje zvyšok dokumentu.
+
+## Bezpečnostné aspekty
+
+- **PII v transit:** TLS 1.3 medzi nami a sportup.sk
+- **Rodné číslo:** lokálne šifrované cez CSFLE; pri komunikácii s sportup.sk len v rámci HTTPS
+- **Webhook secret:** rotovať aspoň raz ročne, audit log použitia
+- **Rate limiting:** nezahltíme ich systém
+- **Privacy:** ak user u nás požiada o GDPR delete, my deaktivujeme `Person` lokálne (`deletedAt` set), do sportup.sk pošleme **proposal na deaktiváciu** (oni rozhodnú podľa svojej politiky a zákona o športe)
+
+## Failure modes a riešenia
+
+| Scenár | Náš handling |
+|---|---|
+| sportup.sk API down | Lokálne čítanie funguje (mirror); zápisy s identitnými zmenami sa queueujú ako pending proposals |
+| Webhook nedoručený | Nightly reconcile to dobehne; webhook signature timeout = retry max 3x |
+| Konflikt v dátach | `syncStatus: 'conflict'`, alert adminovi, manuálne riešenie cez admin UI |
+| Chýbajúce externé ID | Local-only Person, blokovaná niektoré funkcie (napr. licencie), notifikácia adminovi |
+| Sportup.sk zmení API | Náš adaptér je oddelený modul (`SportupSkAdapter`); zmena = aktualizácia adaptéra, zvyšok systému netreba meniť |
+
+## Implementačný modul
+
+Modul, ktorý túto integráciu rieši, žije v registry-mcp servise:
+
+```
+registry-mcp/
+├── src/
+│   ├── integrations/
+│   │   └── sportup-sk/
+│   │       ├── SportupSkAdapter.ts     # HTTP klient
+│   │       ├── SyncOrchestrator.ts     # webhooky + reconcile
+│   │       ├── ConflictResolver.ts     # diff/merge logika
+│   │       ├── ProposalSubmitter.ts    # smer naše → ich
+│   │       └── webhookRoutes.ts
+│   └── ...
+```
+
+Adapter je striktne oddelený od domain logiky. Ak by sa neskôr objavil druhý register (napr. iná krajina), pridá sa paralelný adapter, doménová logika sa nemení.
+
+## Otvorené otázky
+
+Tieto sa vyriešia v komunikácii s maintainermi sportup.sk projektu:
+
+1. **API verzia:** existuje stabilné REST API, alebo musíme prispieť?
+2. **Webhook podpora:** je tam, alebo PR?
+3. **Bulk export:** je tam, alebo PR?
+4. **Authentication:** API key, OAuth, mTLS?
+5. **Rate limits:** akí veľkí sú a aké limity poskytnú našemu integrátorovi?
+6. **Schema evolution:** ako sa rieši nasadzovanie zmien API?
+7. **Sandbox / staging environment:** je dostupné pre náš development?
+
+## Nasleduje
+
+Pre detail mentoring subsystému pokračuj v [features/mentoring](features/mentoring).
+Pre detail Courier subsystému pokračuj v [features/courier](features/courier).
+Pre ACL matice pokračuj v [acl/](acl/).

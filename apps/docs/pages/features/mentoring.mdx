@@ -1,0 +1,393 @@
+# Mentoring
+
+Tento dokument popisuje mentoring subsystém v jednom kuse — od doménových konceptov, cez stavový model, formulár sedenia, ACL pravidlá, až po kľúčové UI obrazovky. Slúži ako referencia pre vývojárov, dizajnérov aj produktových ľudí, aby každý mal jeden zdroj pravdy.
+
+## Doménový kontext
+
+Mentoring v slovenskom športe vzniká primárne pri rozhodcoch — nový rozhodca po základnom vzdelávaní dostane skúseného mentora, ktorý mu je k dispozícii pri rozbore situácií, výklade pravidiel, predzápasovej príprave a kariérnom rozvoji. Systém je navrhnutý generický, takže rovnaký vzor sa dá aplikovať aj pri trénerov, lekároch alebo iných odborných rolách.
+
+### Kľúčový vzťah: cyklus a sedenia
+
+```
+Mentor ────────────────► MentoringCycle ◄──────────────── Mentee
+                              │
+                              ├── Sedenie 1 (záznam mentora)
+                              ├── Sedenie 2 (záznam mentora)
+                              ├── ...
+                              └── Záverečné textové hodnotenie
+```
+
+**MentoringCycle** je dlhodobý kontainer (mesiace až roky). Mentee môže mať viacero cyklov súčasne (napr. hlavný mentor + UEFA mentor) alebo sekvenčne (po jednom cykle nasleduje ďalší s iným mentorom).
+
+**MentoringSession** je riadny typ aktivity (`activityType: 'mentoring_session'`) — jedna formálna interakcia, mentor o nej spraví záznam vo formulári.
+
+Vedľa formálnych sedení existuje aj **neformálna komunikácia cez Courier** — mentor a mentee si môžu kedykoľvek napísať. Z Courier rozsahu správ sa dá vytvoriť sedenie cez funkciu *"Vytvoriť sedenie z týchto správ"*.
+
+## Životný cyklus MentoringCycle
+
+```
+                              ┌─────────────┐
+                              │   Aktívny   │
+        zakladá ────────────► │             │
+        mentor                │             │
+                              └──┬───┬──┬───┘
+                                 │   │  │
+                          pauza  │   │  │ ukončiť
+                                 ▼   │  ▼ (predčasne)
+                          ┌──────────┐│┌────────────────────┐
+                          │Pozastavený│││Predčasne ukončený │
+                          └──┬───────┘ │└────────────────────┘
+                             │ obnoviť │
+                             └─────────┘
+                                 │
+                          hodnotenie
+                                 ▼
+                          ┌─────────────┐
+                          │  Uzavretý   │
+                          └─────────────┘
+```
+
+### Stavy a prechody
+
+| Prechod | Kto smie spustiť | Podmienky |
+|---|---|---|
+| **vznik** → Aktívny | mentor | mentee má hotové základné vzdelávanie, mentor je `eligible` |
+| Aktívny → **pauza** | mentor alebo mentee | uvedenie dôvodu (zranenie, prerušenie, dohoda) |
+| Pozastavený → **obnoviť** | mentor | žiadne sedenia sa medzi tým nevytvorili |
+| Aktívny → **hodnotenie** (Uzavretý) | iba mentor | povinné textové záverečné hodnotenie (max 50 000 znakov) |
+| Aktívny → **ukončiť** (Predčasne ukončený) | mentor alebo mentee | povinný `closureReason` |
+| Pozastavený → **ukončiť** | mentor alebo mentee | povinný `closureReason` |
+
+`Uzavretý` aj `Predčasne ukončený` sú **terminálne** — z nich sa nevracia. Pre pokračovanie mentor založí nový cyklus.
+
+### Záverečné hodnotenie
+
+Pri prechode `Aktívny → Uzavretý` vyplní mentor textové hodnotenie celého cyklu. Pole `finalEvaluation` v `MentoringCycle`:
+
+- voľný text, max ~50 000 znakov
+- markdown podporovaný
+- žiadna automatizovaná štruktúra (kompetenčná matica, atď.) — voľnosť je zámerná
+- po uložení sa cyklus zamkne, hodnotenie sa nedá editovať (alebo len cez audit-loggovanú zmenu admin-om)
+
+## MentoringSession — formulár
+
+### Stavový model formulára
+
+```
+Draft ────► Proposed ────► Recorded ────► (zamknuté po 24h)
+  │           │   │          │
+  │           │   │          └──► Cancelled (do 24h od recordedAt, mentor)
+  │           │   │
+  │           │   └──► Recorded priamo (mentor vyplní bez návrhu)
+  │           │
+  │           └──► Rejected (mentor zamietne návrh mentee)
+  │
+  └──► Recorded priamo (mentor vyplní rovno bez Draft → Proposed cesty)
+```
+
+### Pravidlá prechodov
+
+| Prechod | Kto smie | Povinné polia |
+|---|---|---|
+| nový → **Draft** | mentor alebo mentee | žiadne (môže byť prázdny, autosave každých 30 s) |
+| Draft → **Proposed** | mentee | dátum, trvanie, forma, krátky topic proposal |
+| Draft → **Recorded** | mentor | všetky povinné polia sekcií 2 a 3 |
+| Proposed → **Recorded** | mentor | mentor doplní/upraví, vyplní povinné polia |
+| Proposed → **Rejected** | mentor | povinný `rejectionReason` |
+| Recorded → **Cancelled** | mentor (do 24 h od `recordedAt`) | povinný `cancellationReason` |
+
+`Recorded` po 24 hodinách sa zamykne. Editácia je možná len v administrátorskej moderation s viditeľným audit záznamom.
+
+### Polia formulára
+
+#### Sekcia 1 — Kontext (auto-vyplnené, read-only)
+
+| Pole | Typ | Editovateľné |
+|---|---|---|
+| Cyklus | select | nie (z URL kontextu) |
+| Mentor | osoba | nie (aktuálny prihlásený musí byť mentor cyklu) |
+| Mentee | osoba | nie |
+| Stav sedenia | enum | nie (systém) |
+| Iniciátor | `mentor` / `mentee` | nie (systém) |
+
+#### Sekcia 2 — Kedy a ako (povinné)
+
+| Pole | Typ | Validácia |
+|---|---|---|
+| `occurredAt` | datetime | nesmie byť v budúcnosti pri `recorded`; pri `proposed` budúci čas povolený |
+| `durationMinutes` | int | 5–480, default 60 |
+| `format` | enum | `in_person`, `online`, `phone`, `written`, `hybrid` |
+| `location` | text | povinné len ak `format` ∈ `in_person`, `hybrid` |
+| `onlinePlatform` | text | povinné len ak `format = online` |
+
+#### Sekcia 3 — O čom (povinné)
+
+| Pole | Typ | Validácia |
+|---|---|---|
+| `topics` | string[] | 1–3 hodnoty z číselníka `mentoring_session_topic` |
+| `matchReferenceId` | ObjectId | voliteľné, autocomplete |
+| `summary` | text | min 50, max 5000 znakov; markdown |
+| `outcome` | text | min 30, max 3000 znakov |
+| `nextSteps` | text | voliteľné, max 2000 znakov |
+| `competencyTags` | string[] | predplnené z `referee_competencies` číselníka, mentor môže pridať vlastné |
+
+#### Sekcia 4 — Materiály a väzby (voliteľné)
+
+| Pole | Typ | Poznámka |
+|---|---|---|
+| `attachments` | Attachment[] | obrázky, PDF, dokumenty (žiadne video, len odkazy) |
+| `externalLinks` | ExternalLink[] | URL list — video, články, sociálne príspevky |
+| `linkedConvId` + `rangeStartMsgId` + `rangeEndMsgId` | väzba na Courier | "vytvoriť sedenie z týchto správ" |
+| `linkedSessionIds` | ObjectId[] | nadväznosť na predošlé sedenia |
+
+#### Sekcia 5 — Záver (voliteľné, mentor only)
+
+V samostatnej collection `mentoringSessionPrivateNote`:
+
+| Pole | Typ | Poznámka |
+|---|---|---|
+| `body` | text | mentor pre seba, max 50 000 znakov |
+
+Súkromná poznámka **nie je** v hlavnom dokumente sedenia — je v separátnej collection s vlastným ACL gate-om. Žiadne riziko, že sa cez `findOne` vyplaví do mentee API response.
+
+### Číselník hlavných tém
+
+`mentoring_session_topic` (viď [domain-model](/domain-model) sekciu Codelists):
+
+- `rule_interpretation` — výklad pravidla
+- `match_situation_review` — rozbor situácie zo zápasu
+- `pre_match_preparation` — predzápasová príprava
+- `post_match_debrief` — pozápasový rozbor
+- `physical_preparation` — fyzická príprava
+- `mental_preparation` — mentálna príprava, zvládanie stresu
+- `conflict_handling` — konflikty, zvládanie hráčov a trénerov
+- `career_development` — kariérny rozvoj, postup do triedy
+- `administrative` — administratíva, licencie, nominácie
+- `personal` — osobné, life-balance
+- `other` — iné (otvorí voliteľné textové pole)
+
+## Externí mentori
+
+Mentoringový cyklus môže mať okrem hlavného mentora aj **externých mentorov** — typicky pre špecializovanú expertízu, ktorá v komisii nie je. Príklady:
+
+- UEFA mentor pre rozhodcov chystajúcich sa na medzinárodnú úroveň
+- FIFA mentor pre top kandidátov
+- Bývalý reprezentant pre konkrétnu situáciu
+
+### Externí mentori ako "ľahké identity"
+
+Externí mentori nie sú plnohodnotní používatelia systému. V `Person` collection majú `kind: 'external_lightweight'` — čo znamená:
+
+- nemajú prihlásenie do aplikácie
+- nemajú profil v štandardnom zmysle
+- nie sú v sportup.sk registri (iba v našom systéme pre účely ACL)
+- žijú primárne ako referencia v ACL maticiach
+
+Pridanie externého mentora do cyklu:
+
+```typescript
+add_external_mentor(cycleId: string, externalPersonId: string): MentoringCycle
+```
+
+Externý mentor potom dostane prístup *do tohto konkrétneho cyklu*: vidí sedenia, môže komentovať, môže byť účastníkom prepojenej Courier konverzácie. Žiaden prístup do iných cyklov toho istého mentora.
+
+### Implementačná poznámka
+
+V `MentoringCycle` je pole `externalMentorIds: ObjectId[]` — embedded zoznam ObjectId-čiek, lebo externí mentori sa vždy čítajú spolu s cyklom (nemá zmysel mať separátnu collection pre samotný vzťah).
+
+## Sedenie iniciované oboma stranami
+
+Z dohody:
+- Sedenie môže navrhnúť mentor aj mentee
+- **Formulár vypĺňa vždy mentor** (DB constraint na `recordedByPersonId`)
+
+### Tok keď navrhne mentee
+
+1. Mentee otvorí v aplikácii *Navrhnúť sedenie*
+2. Vyplní krátky formulár: dátum, trvanie, forma, krátky popis témy
+3. Submit vytvorí `MentoringSession` so `status: 'proposed'`, `proposedByPersonId: mentee`, `recordedByPersonId: mentor` (auto-zistené z cyklu)
+4. Mentor dostane notifikáciu (email + push)
+5. Mentor otvorí návrh, doplní zvyšné polia (témy z číselníka, summary, outcome, ...) a uloží ako `recorded`
+   — alebo zamietne s `rejectionReason`
+
+Návrh nie je riadny "polovičný formulár", ktorý by mentee mohol upravovať. Je to *žiadosť*. Mentor ju buď akceptuje a vyplní celý záznam, alebo zamietne.
+
+## Komentáre pod sedením
+
+Komentáre sú generický mechanizmus (`ActivityComment` polymorfne), aplikuje sa rovnako pre sedenia ako pre iné aktivity.
+
+### ACL pre komentáre pod mentoringovým sedením
+
+| Rola | Operácie |
+|---|---|
+| Mentor cyklu | R W E |
+| Mentee cyklu | R W E |
+| Externý mentor (priradený k cyklu) | R W E |
+| Predseda komisie rozhodcov (org admin) | R |
+| Admin organizácie | R M (moderation) |
+
+Komentáre vidia *všetci účastníci ACL gate-u*. Ak chceš diskutovať len medzi mentorom a mentee, použite Courier (1:1 direct chat).
+
+Detailne ACL pre všetky typy aktivít je v [acl/matrix-comments](/acl/matrix-comments).
+
+## Notifikácie
+
+Mentee je notifikovaný **vždy** pri:
+
+| Udalosť | Notifikácia mentee |
+|---|---|
+| Mentor zaznamená nové sedenie (`status → recorded`) | email + push |
+| Mentor edituje existujúce sedenie | email + push |
+| Mentor zruší sedenie (`recorded → cancelled`) | email + push |
+| Mentor zamietne návrh sedenia (`proposed → rejected`) | email + push |
+| Mentor uzavrie cyklus (`active → completed`) | email + push s plným záverečným hodnotením |
+
+Užívateľ si môže prepnúť notifikácie na *email digest* (jeden súhrn 1× denne) namiesto okamžitých, ale úplne vypnúť ich nemôže — sú to záznamy o ňom samotnom.
+
+Mentor je notifikovaný:
+
+| Udalosť | Notifikácia mentora |
+|---|---|
+| Mentee navrhne sedenie | email + push |
+| Mentee napíše komentár pod sedením | email + push |
+| Externý mentor / predseda komisie pridá komentár | email + push |
+
+## Práva a prepojenia
+
+### Vyprchávanie prístupu
+
+| Stav cyklu | Práva mentora | Práva mentee | Práva externého mentora |
+|---|---|---|---|
+| Aktívny / Pozastavený | R W E | R W E (komentáre, návrhy sedení) | R W E (ak priradený) |
+| Uzavretý / Predčasne ukončený | R (audit) | R (audit) | R (audit) |
+
+Po ukončení cyklu nikto nemôže pridávať nové sedenia ani komentáre. Existujúce dáta zostávajú v read-only stave po dobu retencie.
+
+### Retencia
+
+`MentoringCycle` a všetky `MentoringSession` v ňom sú **archivované, nemažú sa**. Štandardne navždy (auditovateľnosť kariéry odborníka). Pri GDPR delete request sa anonymizujú (nahradenie osobných údajov pseudoanonymnými ID), ale štruktúra a obsah sedení zostáva pre štatistické účely.
+
+Súvisiace Courier konverzácie majú vlastnú retenciu nastavenú per organizácia — pri ukončení cyklu sa odporúča predĺžiť ich retenciu, aby celý kontext prežil rovnako dlho ako záverečné hodnotenie. Toto je zatiaľ manuálny krok admin organizácie.
+
+## UI obrazovky
+
+V tejto sekcii popisujem kľúčové obrazovky, ktoré sa týkajú mentoringu. Konkrétne mockupy sú v [ui/mockups](/ui/mockups).
+
+### Detail mentoringového cyklu — pohľad mentora
+
+**Účel:** vstupný bod pre mentora, prehľad celého cyklu.
+
+**Obsahuje:**
+- Hlavička s menom mentee, mentora, sportom, úrovňou, statusom cyklu
+- Metric cards: počet sedení, hodiny spolu, posledné sedenie, počet účastníkov ACL
+- Akčná lišta: *Nové sedenie*, *Otvoriť Courier*, *Pridať externého mentora*, *Ukončiť cyklus*
+- Zoznam sedení so statusovými odznakmi (Recorded, Proposed, Draft) zoradený najnovšie najprv
+- Drafty vizuálne stlmené (`opacity: 0.7`)
+
+### Detail mentoringového cyklu — pohľad mentee
+
+**Účel:** prehľad cyklu pre mentee, len read-only akcie.
+
+**Obsahuje rovnaké ako mentor pohľad, ale:**
+- Akčná lišta má len: *Navrhnúť sedenie*, *Otvoriť Courier*, *Ukončiť cyklus* (s povinným reason-om)
+- Drafty mentora **nie sú viditeľné**
+- Súkromná poznámka mentora **nie je viditeľná** ani v zoznamoch
+
+### Formulár sedenia — vyplnenie mentorom
+
+**Účel:** mentor vypĺňa formulár o sedení.
+
+**Obsahuje:**
+- Hlavička s názvom cyklu, statusom (Draft / Proposed / Recorded)
+- Indikátor *"Auto-uložené pred 12 s"* (autosave každých 30 s + na blur)
+- Sekcie 1–4 (kontext, kedy, o čom, materiály)
+- Sekcia 5 (súkromná poznámka) — vizuálne oddelená šedým pozadím a výrazným *"Mentee NEVIDÍ"* upozornením
+- Pri prepojení s Courier: info pás *"Prepojené správy z Courier (12 správ)"* s tlačidlom *Zobraziť*
+- Pätka: *Uložiť ako Draft* + *Uložiť ako Recorded* (primárne tlačidlo)
+- Hint: *"Po uložení sa mentee notifikuje. Editácia bude možná 24 h."*
+
+### Detail uloženého sedenia — pohľad mentora
+
+**Účel:** mentor číta záznam a komentáre, prípadne edituje (do 24h).
+
+**Obsahuje:**
+- Hlavičku s názvom, statusom, časom konania
+- Warning pás s odpočtom *"Editovateľné ešte 18:32:14"* (žltý)
+- Všetky polia sedenia v read-friendly formáte
+- Súkromnú poznámku v samostatnej zóne (len mentor vidí)
+- Väzbu na Courier rozsah (tlačidlo *Otvoriť rozsah*)
+- Komentárové vlákno
+- Input pre nový komentár
+
+### Detail uloženého sedenia — pohľad mentee
+
+**Účel:** mentee číta záznam, ktorý urobil mentor.
+
+**Obsahuje:**
+- Hlavičku rovnako
+- **Žiadny** warning pás (mentee nemôže editovať)
+- Mäkký info pás *"Tento záznam vytvoril tvoj mentor — ak niečo nesedí, napíš mu cez Courier alebo do diskusie nižšie"*
+- Polia sedenia v read-friendly formáte
+- **Bez súkromnej poznámky**
+- *Ďalšie kroky* zvýraznené (sivý box) — pre mentee jediná akčná položka
+- Komentárové vlákno (autor *"Ty"* namiesto vlastného mena)
+- Hint pod input-om: *"Tvoj komentár uvidí mentor a predseda komisie"*
+
+## Implementačné body
+
+### Validácia v servisnej vrstve
+
+Cross-collection invarianty (mentor cyklu = recordedByPersonId sedenia, mentee má dokončené vzdelávanie, atď.) idú cez `MentoringService`. Príklad:
+
+```typescript
+class MentoringService {
+  async recordSession(input: RecordSessionInput, currentUserId: ObjectId): Promise<MentoringSession> {
+    const cycle = await this.cycleRepo.findById(input.cycleId);
+    if (!cycle) throw new NotFoundError('MENTORING_CYCLE_NOT_FOUND');
+    if (cycle.status !== 'active') throw new InvalidStateError('MENTORING_CYCLE_NOT_ACTIVE');
+    if (!cycle.mentorPersonId.equals(currentUserId)) {
+      throw new ForbiddenError('MENTORING_SESSION_REQUIRES_MENTOR');
+    }
+    // ... cross-collection invariant checks
+    const session = await this.sessionRepo.create({
+      ...input,
+      cycleId: cycle._id,
+      recordedByPersonId: cycle.mentorPersonId,
+      proposedByPersonId: input.proposedByPersonId ?? currentUserId,
+      activityType: 'mentoring_session',
+      status: 'recorded',
+      recordedAt: new Date(),
+    });
+    await this.eventBus.publish('mentoring_session.recorded', { sessionId: session._id, /*...*/ });
+    return session;
+  }
+}
+```
+
+### Autosave
+
+Frontend pri každej zmene v Draft state-e robí debounced PATCH na `/api/mentoring-sessions/{id}/draft` (debounce 5 s, alebo na blur). Backend len updateuje dokument, status zostáva `draft`. UI indikátor sa updateuje lokálnym timer-om, server response ho len resetuje na *"pred 0 s"*.
+
+### Zámok po 24h
+
+Background job (cron každú minútu) kontroluje sessions so `status: 'recorded'` a `recordedAt < now() - 24h`, ktoré nie sú zamknuté. Pridáva audit log entry. UI pri pokuse o edit kontroluje aj na FE side (zobrazuje warning pás) aj na BE side (vracia `MENTORING_SESSION_EDIT_WINDOW_EXPIRED` error).
+
+### Atlas Search
+
+Plánujeme full-text search index nad poľami `summary`, `outcome`, `nextSteps`, `finalEvaluation`. Cieľ: vyhľadávanie vo vlastných sedeniach pre mentora ("kde sme rozoberali ofsajd?") a štatistiky pre admin organizácie (frekventované témy).
+
+## Otvorené otázky pre budúce iterácie
+
+Tieto neblokujú MVP, ale stojí za to ich zaznamenať:
+
+1. **Štruktúrované záverečné hodnotenie** — môže byť, že popri voľnom texte budeme chcieť aj skoreovaciu maticu kompetencií (na 1–5). Schéma to vie podporiť pridaním `finalCompetencyScores: Record<string, number>`.
+2. **Mentor odovzdáva cyklus inému mentorovi** — zriedkavé, ale môže nastať pri zmene komisie. Vyžaduje migration tool a explicitné UI.
+3. **Skupinový mentoring** — viacerí menti pod jedným mentorom v jednej "kohorte". Súčasná schéma to nepodporuje (1:1 vzťah cyklu), pridanie by vyžadovalo refaktoring.
+4. **Mobilné notifikácie** — push notifikácie cez mobilnú appku (zatiaľ máme len email, push sa pridá s mobilnou appkou).
+5. **AI asistent pre mentora** — pri vyplňovaní summary pomôže AI navrhnúť témy alebo štruktúrovať odpoveď. Vyžaduje doménový tréning a opt-in od mentora a mentee.
+
+## Nasleduje
+
+Pre Courier subsystém pokračuj v [courier](courier).
+Pre polymorfné komentáre pokračuj v [activity-comments](activity-comments).
+Pre ACL matice pokračuj v [../acl/matrix-comments](/acl/matrix-comments).

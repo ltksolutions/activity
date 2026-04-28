@@ -1,0 +1,789 @@
+# Doménový model
+
+Tento dokument popisuje entity systému, ich atribúty, vzťahy a implementáciu v MongoDB. Je referenčný — schémy v kóde a v JSON Schema validátoroch sa naňho odvolávajú.
+
+## Filozofia
+
+Model je rozdelený do troch logických MongoDB databáz, ktoré zodpovedajú trom MCP serverom:
+
+| MongoDB DB | MCP server | Obsah |
+|---|---|---|
+| `activity_registry` | registry-mcp | Persons, Organizations, Licenses, Codelists |
+| `activity_main` | activity-mcp | Activities (polymorfné), Mentoring, Comments, AuditLog |
+| `activity_courier` | courier-mcp | Conversations, Messages, Attachments |
+
+Každá DB je logicky oddelená. V Atlas to znamená samostatnú databázu v rovnakom clustri (na začiatku), s možnosťou rozdeliť do separátnych clustrov pri raste.
+
+Cross-DB vzťahy (napr. mentoringSession.cycleId ↔ Person v `activity_registry`) sú riešené cez **ID referencie**. Aplikačná vrstva vie, kde každá entita žije, a robí lookup explicitne. Žiadne cross-DB joinš (MongoDB ich aj tak nepodporuje).
+
+## Konvencie pre dokumenty
+
+### Spoločné polia každého dokumentu
+
+```typescript
+{
+  _id: ObjectId,                  // MongoDB primárny kľúč
+  tenantId: ObjectId,             // multi-tenancy scoping (povinný pre business collections)
+  createdAt: Date,
+  updatedAt: Date,
+  deletedAt: Date | null,         // soft-delete
+  schemaVersion: number,          // pre prípadné migrácie schémy
+}
+```
+
+`tenantId` chýba len v *globálnych* collections (Codelist, CodelistValue), ktoré nie sú per-tenant.
+
+### Naming konvencie
+
+- **camelCase** pre polia (`createdAt`, `mentorPersonId`, nie `created_at`)
+- **PascalCase** pre názvy entít a Zod schém v kóde (`MentoringCycle`, `PersonSchema`)
+- **camelCase** pre názvy collections (`mentoringCycle`, `mentoringSession`)
+- **camelCase + Id postfix** pre ID referencie (`mentorPersonId`, nie `mentor_id` ani `mentorId`)
+- **plural len pre kolekcie samotné, nie v poliach** (`db.persons` ale `personId`, nie `personsId`)
+
+### Zod + JSON Schema vzor
+
+Schémy definujeme v Zod, JSON Schema validátor pre MongoDB collection generujeme automaticky.
+
+```typescript
+// schemas/person.ts
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+export const PersonSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId).optional(), // null pre system-wide osoby
+  kind: z.enum(['internal', 'external_lightweight']),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  birthDate: z.date(),
+  nationality: z.string().length(2), // ISO 3166-1 alpha-2
+  email: z.string().email().optional(),
+  phone: z.string().regex(/^\+?[0-9 \-()]+$/).optional(),
+  language: z.enum(['sk', 'cs', 'en', 'de', 'pl', 'hu']),
+  primaryRole: z.enum(['athlete', 'professional', 'fan', 'supporter']),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+
+export type Person = z.infer<typeof PersonSchema>;
+
+// Pri inicializácii DB
+await db.command({
+  collMod: 'person',
+  validator: { $jsonSchema: zodToJsonSchema(PersonSchema) },
+  validationLevel: 'strict',
+});
+```
+
+Vstupy (od klientov, MCP volaní) sú validované **Zod-om**, MongoDB pri zápise validuje znovu cez **JSON Schema** — defence in depth.
+
+## Cross-collection invarianty
+
+Bez foreign keys a CHECK constraints musíme niektoré pravidlá vynucovať v aplikačnej vrstve. Tie kritické zhrnieme tu.
+
+| Invariant | Vynútené v |
+|---|---|
+| `mentoringCycle.mentorPersonId != menteeePersonId` | Zod refine + JSON Schema |
+| `mentoringCycle.foundedByPersonId == mentorPersonId` | Zod refine + JSON Schema |
+| `mentoringSession.recordedByPersonId == cycle.mentorPersonId` | Aplikačná služba pri zápise |
+| `conversation.e2eEnabled === (kind === 'direct')` | Zod refine + JSON Schema |
+| `participant.dndActive` len pre group/broadcast | Aplikačná služba pri zápise |
+| `participant.participantType == 'proxy_for_minor'` vyžaduje platný `parentalAccess` | Aplikačná služba pri zápise |
+| `mentoringCycle.status='completed'` vyžaduje `finalEvaluation` | Zod refine + JSON Schema |
+
+Centralizujeme ich v servisnej vrstve (`MentoringService`, `CourierService`, atď.). Žiadny endpoint by nemal písať priamo do MongoDB collection — vždy cez servisnú metódu, ktorá invarianty kontroluje.
+
+## Indexy
+
+Pre každú collection definujeme indexy v migračnom skripte. Všeobecné pravidlá:
+
+- **Compound indexy začínajú s `tenantId`** (multi-tenancy scoping)
+- **Pre časové queries** druhým poľom je `occurredAt` alebo `createdAt` v zostupnom poradí
+- **Unique indexy** majú partial filter pre `deletedAt: null` (aby sa po soft-delete dali znovu použiť hodnoty ako email)
+
+Konkrétne indexy uvedieme pri každej collection nižšie.
+
+## Registre (`activity_registry`)
+
+### `person`
+
+Fyzická osoba v systéme.
+
+```typescript
+const PersonSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId).nullable(), // null pre cross-tenant osoby (externí mentori)
+  kind: z.enum(['internal', 'external_lightweight']),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  birthDate: z.date(),
+  nationality: z.string().length(2),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  identifierNational: z.string().optional(), // šifrované cez MongoDB CSFLE
+  language: z.enum(['sk', 'cs', 'en', 'de', 'pl', 'hu']),
+  primaryRole: z.enum(['athlete', 'professional', 'fan', 'supporter']),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.person.createIndex({ tenantId: 1, lastName: 1, firstName: 1 })
+db.person.createIndex({ email: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } })
+db.person.createIndex({ identifierNational: 1 }, { unique: true, partialFilterExpression: { deletedAt: null, identifierNational: { $exists: true } } })
+```
+
+**Computed properties** (v aplikačnej vrstve, nie v DB):
+
+- `isMinor` — odvodené z `birthDate` a aktuálneho dátumu
+- `displayName` — `${firstName} ${lastName}`
+
+Osoba môže mať viac rolí súčasne. Roly sú v separátnych collections (`organizationMember`, `license`).
+
+### `organization`
+
+```typescript
+const OrganizationSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  type: z.enum(['club', 'federation', 'commission', 'educational', 'sponsor']),
+  legalName: z.string().min(1).max(200),
+  displayName: z.string().min(1).max(100),
+  ico: z.string().regex(/^\d{8}$/).optional(),
+  sportId: z.instanceof(ObjectId).optional(),
+  parentOrgId: z.instanceof(ObjectId).optional(),
+  defaultRetentionDays: z.number().int().min(1).default(365),
+  minorSelfJoinAge: z.number().int().min(13).max(18).default(16),
+  branding: z.object({
+    accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    logoUrl: z.string().url().optional(),
+  }).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.organization.createIndex({ ico: 1 }, { unique: true, partialFilterExpression: { ico: { $exists: true } } })
+db.organization.createIndex({ parentOrgId: 1 })
+db.organization.createIndex({ sportId: 1, type: 1 })
+```
+
+### `organizationMember`
+
+Členstvo osoby v organizácii s rolou.
+
+```typescript
+const OrganizationMemberSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  organizationId: z.instanceof(ObjectId),
+  personId: z.instanceof(ObjectId),
+  role: z.enum([
+    'athlete', 'coach', 'referee', 'medical', 'physiotherapist',
+    'manager', 'admin', 'commission_chair', 'parent', 'fan_official', 'sponsor_rep'
+  ]),
+  startedAt: z.date(),
+  endedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.organizationMember.createIndex({ organizationId: 1, personId: 1, role: 1 }, { unique: true })
+db.organizationMember.createIndex({ personId: 1, endedAt: 1 })
+db.organizationMember.createIndex({ organizationId: 1, role: 1, endedAt: 1 })
+```
+
+Osoba môže mať viacero rolí v jednej organizácii (napr. tréner aj rodič). Aktuálne členstvá sú tie s `endedAt: null`.
+
+### `organizationDomain`
+
+Custom doména pre organizáciu (multi-tenancy).
+
+```typescript
+const OrganizationDomainSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  organizationId: z.instanceof(ObjectId),
+  hostname: z.string().regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/),
+  isPrimary: z.boolean().default(false),
+  status: z.enum(['pending_verification', 'active', 'disabled']),
+  verifyToken: z.string().optional(),
+  verifiedAt: z.date().nullable(),
+  tlsStatus: z.enum(['not_yet', 'issuing', 'issued', 'failed']),
+  tlsIssuedAt: z.date().nullable(),
+  tlsExpiresAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.organizationDomain.createIndex({ hostname: 1 }, { unique: true })
+db.organizationDomain.createIndex({ organizationId: 1 })
+db.organizationDomain.createIndex({ tlsExpiresAt: 1 }, { partialFilterExpression: { tlsStatus: 'issued' } })
+```
+
+Default subdoména organizácie (`sfz.activity.sportup.sk`) je tiež záznam tu, len s `status='active'` od počiatku a bez `verifyToken`.
+
+### `license`
+
+Profesijná licencia (tréner, rozhodca, lekár, atď.).
+
+```typescript
+const LicenseSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  personId: z.instanceof(ObjectId),
+  licenseType: z.enum([
+    'coach', 'referee', 'physiotherapist', 'medical_doctor',
+    'mental_coach', 'nutritionist', 'fitness_coach'
+  ]),
+  level: z.string(), // I, II, III, IV podľa zákona o športe
+  issuingOrgId: z.instanceof(ObjectId),
+  issuedAt: z.date(),
+  validUntil: z.date(),
+  status: z.enum(['active', 'suspended', 'expired', 'revoked']),
+  creditsRequired: z.number().int().min(0).default(0),
+  creditsEarned: z.number().int().min(0).default(0),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.license.createIndex({ personId: 1, licenseType: 1, status: 1 })
+db.license.createIndex({ issuingOrgId: 1, licenseType: 1 })
+db.license.createIndex({ validUntil: 1 }, { partialFilterExpression: { status: 'active' } })
+```
+
+### `parentalAccess`
+
+Vzťah rodič ↔ neplnoleté dieťa.
+
+```typescript
+const ParentalAccessSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  minorPersonId: z.instanceof(ObjectId),
+  parentPersonId: z.instanceof(ObjectId),
+  validUntil: z.date(),       // automaticky minor.birthDate + 18 rokov
+  restricted: z.boolean().default(false),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.parentalAccess.createIndex({ minorPersonId: 1, parentPersonId: 1 }, { unique: true })
+db.parentalAccess.createIndex({ parentPersonId: 1, validUntil: 1 })
+db.parentalAccess.createIndex({ validUntil: 1 }) // pre nightly job na expiráciu
+```
+
+V deň plnoletosti dieťaťa záznam stratí platnosť. Background job kontroluje `validUntil < now()` a archivuje.
+
+### `codelist` a `codelistValue`
+
+Číselníky. Globálne (cross-tenant), žiadny `tenantId`.
+
+```typescript
+const CodelistSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  name: z.string(), // "mentoring_session_topic", "referee_competencies", ...
+  description: z.string().optional(),
+  isCustomizable: z.boolean().default(false), // môžu organizácie pridávať vlastné hodnoty?
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+const CodelistValueSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  codelist: z.string(),
+  code: z.string(), // "rule_interpretation"
+  parentValueId: z.instanceof(ObjectId).optional(), // pre hierarchické číselníky
+  ordering: z.number().int().default(0),
+  isCustom: z.boolean().default(false),
+  customForOrgId: z.instanceof(ObjectId).optional(), // ak isCustom=true
+  translations: z.record(
+    z.enum(['sk', 'cs', 'en', 'de', 'pl', 'hu']),
+    z.object({
+      label: z.string().min(1),
+      description: z.string().optional(),
+      translatedByPersonId: z.instanceof(ObjectId).optional(),
+      verifiedAt: z.date().optional(),
+      verifiedByPersonId: z.instanceof(ObjectId).optional(),
+    })
+  ),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.codelist.createIndex({ name: 1 }, { unique: true })
+db.codelistValue.createIndex({ codelist: 1, code: 1, customForOrgId: 1 }, { unique: true })
+db.codelistValue.createIndex({ codelist: 1, ordering: 1 })
+db.codelistValue.createIndex({ customForOrgId: 1, codelist: 1 })
+```
+
+Embedded translations namiesto separátnej collection — číselníkové hodnoty sa čítajú vždy s prekladmi, embedding je tu efektívnejší. Fallback na `en` ak chýba preklad pre žiadaný jazyk.
+
+## Aktivity (`activity_main`)
+
+### Aktivita ako koncept
+
+Activity nie je jedna collection, ale **skupina collections s rovnakou kostrou**. Každý typ má vlastnú collection so spoločnými poľami:
+
+```typescript
+// Spoločné polia každej aktivity
+{
+  _id: ObjectId,
+  tenantId: ObjectId,
+  activityType: string,           // "mentoring_session", "training", ... — pre polymorfné komentáre
+  occurredAt: Date,
+  durationMinutes: number,
+  participantPersonIds: ObjectId[], // pre rýchle queries "moje aktivity"
+  createdAt: Date,
+  updatedAt: Date,
+  deletedAt: Date | null,
+  schemaVersion: number,
+}
+```
+
+Každý typ má naviac vlastné špecifické polia. Polymorfné komentáre sa odkazujú cez `(activityType, activityId)`.
+
+### Typy aktivít
+
+Toto sú všetky typy aktivít v systéme. Každý je samostatná collection s vlastnou Zod schémou, ale zdieľajú spoločnú kostru vyššie a polymorfné komentáre.
+
+| `activityType` | Collection | Popis |
+|---|---|---|
+| `training` | `training` | Tréning (kondičný, technický, taktický, regenerácia) |
+| `match_participation` | `matchParticipation` | Účasť na zápase / preteku v ľubovoľnej role (hráč, rozhodca, delegát) |
+| `medical_treatment` | `medicalTreatment` | Lekárske ošetrenie, fyzioterapia (citlivé, prísnejšie ACL) |
+| **`mentoring_session`** | **`mentoringSession`** | **Mentoringové sedenie — jeden vyplnený formulár** |
+| `education_event` | `educationEvent` | Vzdelávanie (kurz, seminár, antidopingové školenie) |
+| `donation` | `donation` | Finančný dar od podporovateľa |
+| `sponsorship_activation` | `sponsorshipActivation` | Sponzorská aktivácia (kampaň, content) |
+| `fan_interaction` | `fanInteraction` | Hlasovanie, predikcia, návšteva podujatia |
+
+### Aktivity vs. kontainery
+
+Aktivity sú vždy **udalosti v čase** — majú `occurredAt` a `durationMinutes`. Žijú a archivujú sa ako záznamy.
+
+Vedľa nich existujú **kontainery** — entity, ktoré aktivity zoskupujú alebo dlhodobo spravujú:
+
+- **`Person`** (v `activity_registry`) — kontainer pre všetky aktivity osoby (jej tréningy, sedenia, ošetrenia, ...)
+- **`MentoringCycle`** (v `activity_main`) — kontainer pre `MentoringSession` aktivity v rámci dlhodobého vzťahu mentor-mentee
+
+`MentoringCycle` *nie je* aktivita (nemá `occurredAt`, trvá mesiace až roky) — je to vzťahový kontainer. Naopak, `MentoringSession` je riadny typ aktivity, presne ako `Training` alebo `MatchParticipation`.
+
+Tento prístup znamená, že na mentoringové sedenia sa **automaticky aplikujú** všetky generické funkcie pre aktivity: polymorfné komentáre, audit log, timeline aktivít osoby, agregačné reporty (*"koľko hodín odbornej činnosti odpracoval mentor X za štvrťrok"* spočíta `Training` + `MentoringSession` + `EducationEvent` jednou query naprieč collectionmi).
+
+### `mentoringCycle`
+
+Dlhodobý vzťah mentor-mentee.
+
+```typescript
+const MentoringCycleSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  mentorPersonId: z.instanceof(ObjectId),
+  menteePersonId: z.instanceof(ObjectId),
+  sportId: z.instanceof(ObjectId),
+  level: z.enum(['regional', 'national', 'uefa', 'fifa']),
+  foundedByPersonId: z.instanceof(ObjectId),
+  externalMentorIds: z.array(z.instanceof(ObjectId)).default([]), // embedded — vždy sa čítajú s cyklom
+  startedAt: z.date(),
+  endedAt: z.date().nullable(),
+  status: z.enum(['active', 'paused', 'completed', 'terminated']),
+  finalEvaluation: z.string().max(50000).optional(),
+  closureReason: z.string().max(2000).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+}).refine(
+  data => !data.mentorPersonId.equals(data.menteePersonId),
+  { message: 'mentor and mentee must differ' }
+).refine(
+  data => data.foundedByPersonId.equals(data.mentorPersonId),
+  { message: 'cycle must be founded by the mentor' }
+).refine(
+  data => data.status !== 'completed' || (data.finalEvaluation && data.finalEvaluation.length >= 1),
+  { message: 'completed cycle requires final evaluation' }
+);
+```
+
+**Indexy**:
+
+```javascript
+db.mentoringCycle.createIndex({ tenantId: 1, mentorPersonId: 1, status: 1 })
+db.mentoringCycle.createIndex({ tenantId: 1, menteePersonId: 1, status: 1 })
+db.mentoringCycle.createIndex({ tenantId: 1, status: 1, startedAt: -1 })
+```
+
+`externalMentorIds` je embedded (pole ObjectId-čiek priamo v dokumente cyklu) — externí mentori sa vždy čítajú spolu s cyklom, oddelená collection by len pridala join.
+
+### `mentoringSession`
+
+Jeden konkrétny vyplnený formulár o mentoringu.
+
+```typescript
+const MentoringSessionSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  activityType: z.literal('mentoring_session'),
+  cycleId: z.instanceof(ObjectId),
+  status: z.enum(['draft', 'proposed', 'recorded', 'rejected', 'cancelled']),
+  proposedByPersonId: z.instanceof(ObjectId),
+  recordedByPersonId: z.instanceof(ObjectId), // vždy mentor (vynútené v servise)
+  occurredAt: z.date(),
+  durationMinutes: z.number().int().min(5).max(480),
+  format: z.enum(['in_person', 'online', 'phone', 'written', 'hybrid']),
+  location: z.string().optional(),
+  onlinePlatform: z.string().optional(),
+  topics: z.array(z.string()).min(1).max(3), // 1-3 hodnoty z mentoring_session_topic codelistu
+  matchReferenceId: z.instanceof(ObjectId).optional(),
+  summary: z.string().min(50).max(5000),
+  outcome: z.string().min(30).max(3000),
+  nextSteps: z.string().max(2000).optional(),
+  competencyTags: z.array(z.string()).default([]),
+  attachments: z.array(z.object({
+    kind: z.enum(['image', 'pdf', 'docx', 'xlsx', 'other_document']),
+    url: z.string().url(),
+    filename: z.string(),
+    sizeBytes: z.number().int().positive(),
+    mimeType: z.string(),
+  })).default([]),
+  externalLinks: z.array(z.object({
+    url: z.string().url(),
+    title: z.string().optional(),
+  })).default([]),
+  linkedConvId: z.instanceof(ObjectId).optional(),
+  rangeStartMsgId: z.instanceof(ObjectId).optional(),
+  rangeEndMsgId: z.instanceof(ObjectId).optional(),
+  recordedAt: z.date().optional(), // pre tracking 24h editačného okna
+  rejectionReason: z.string().optional(),
+  cancellationReason: z.string().optional(),
+  participantPersonIds: z.array(z.instanceof(ObjectId)).default([]), // pre rýchle queries
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+```
+
+Validácia podmienených polí (`location` ak `format === 'in_person'`, atď.) ide cez `.refine()` v Zod schéme — vynechávam pre čitateľnosť.
+
+**Indexy**:
+
+```javascript
+db.mentoringSession.createIndex({ tenantId: 1, cycleId: 1, occurredAt: -1 })
+db.mentoringSession.createIndex({ tenantId: 1, status: 1 })
+db.mentoringSession.createIndex({ tenantId: 1, recordedByPersonId: 1, occurredAt: -1 })
+db.mentoringSession.createIndex({ tenantId: 1, recordedAt: 1 }, { partialFilterExpression: { status: 'recorded' } })
+```
+
+### `mentoringSessionPrivateNote`
+
+Samostatná collection kvôli ACL — eliminuje riziko, že sa cez `findOne` vyplaví do mentee API response.
+
+```typescript
+const MentoringSessionPrivateNoteSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  sessionId: z.instanceof(ObjectId),
+  authorPersonId: z.instanceof(ObjectId), // vždy mentor
+  body: z.string().max(50000),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.mentoringSessionPrivateNote.createIndex({ tenantId: 1, sessionId: 1 }, { unique: true })
+```
+
+ACL: čítať smie len mentor cyklu + admin organizácie (audit-only). Vynútené v servisnej vrstve, žiadny endpoint nečíta z tejto collection bez explicitnej autorizácie.
+
+### `activityComment`
+
+Polymorfný komentár pod hocijakou aktivitou.
+
+```typescript
+const ActivityCommentSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  activityType: z.string(), // "mentoring_session", "medical_treatment", ...
+  activityId: z.instanceof(ObjectId),
+  authorPersonId: z.instanceof(ObjectId),
+  body: z.string().min(1).max(10000),
+  parentCommentId: z.instanceof(ObjectId).optional(), // max 1 úroveň zanorenia
+  editedAt: z.date().optional(),
+  createdAt: z.date(),
+  deletedAt: z.date().nullable(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.activityComment.createIndex({ tenantId: 1, activityType: 1, activityId: 1, createdAt: 1 })
+db.activityComment.createIndex({ tenantId: 1, authorPersonId: 1, createdAt: -1 })
+```
+
+Polymorfizmus znamená, že DB nevynúti referenčnú integritu na `activityId` — kontroluje sa v servisnej vrstve pri zápise (overí, že `activityType` collection má dokument s daným `activityId`).
+
+ACL pravidlá per `activityType` × rola sú v [acl/matrix-comments](acl/matrix-comments).
+
+### `auditLog`
+
+Záznam každého prístupu k citlivým záznamom (lekárske, súkromné poznámky mentora, ...) a každej moderation akcie.
+
+```typescript
+const AuditLogSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  accessedByPersonId: z.instanceof(ObjectId),
+  targetType: z.string(),
+  targetId: z.instanceof(ObjectId),
+  action: z.enum(['read', 'update', 'delete', 'moderate', 'export']),
+  reason: z.string().optional(),
+  ipAddress: z.string().optional(),
+  userAgent: z.string().optional(),
+  accessedAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.auditLog.createIndex({ tenantId: 1, accessedAt: -1 })
+db.auditLog.createIndex({ tenantId: 1, targetType: 1, targetId: 1, accessedAt: -1 })
+db.auditLog.createIndex({ tenantId: 1, accessedByPersonId: 1, accessedAt: -1 })
+
+// TTL index — staršie záznamy sa automaticky mažú po 7 rokoch (GDPR retention)
+db.auditLog.createIndex({ accessedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 365 * 7 })
+```
+
+Append-only collection — záznamy sa nemažú ručne, mažú sa len cez TTL index.
+
+Schémy ďalších typov aktivít (`training`, `matchParticipation`, `medicalTreatment`, `educationEvent`, `donation`, `sponsorshipActivation`, `fanInteraction`) majú rovnakú kostru aktivity a vlastné špecifické polia. Detailne sú popísané v [workflows/](workflows/) per kategória používateľa.
+
+## Komunikácia (`activity_courier`)
+
+### `conversation`
+
+```typescript
+const ConversationSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  kind: z.enum(['direct', 'group', 'broadcast']),
+  owningOrgId: z.instanceof(ObjectId),
+  title: z.string().max(200).optional(),
+  e2eEnabled: z.boolean(),
+  retentionDays: z.number().int().min(1),
+  archivedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  schemaVersion: z.literal(1),
+}).refine(
+  data => data.e2eEnabled === (data.kind === 'direct'),
+  { message: 'E2E is enabled if and only if kind is direct' }
+);
+```
+
+**Indexy**:
+
+```javascript
+db.conversation.createIndex({ tenantId: 1, kind: 1 })
+db.conversation.createIndex({ tenantId: 1, owningOrgId: 1 })
+```
+
+### `conversationParticipant`
+
+Účastník konverzácie. Kľúč podporuje proxy účastníctvo cez `representedMinorId`.
+
+```typescript
+const ConversationParticipantSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  conversationId: z.instanceof(ObjectId),
+  personId: z.instanceof(ObjectId),
+  representedMinorId: z.instanceof(ObjectId).nullable(),
+  participantType: z.enum(['direct', 'proxy_for_minor', 'staff', 'observer']),
+  role: z.enum(['member', 'admin', 'publisher', 'subscriber']),
+  dndActive: z.boolean().default(false),
+  joinedAt: z.date(),
+  leftAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.conversationParticipant.createIndex(
+  { conversationId: 1, personId: 1, representedMinorId: 1 },
+  { unique: true }
+)
+db.conversationParticipant.createIndex({ tenantId: 1, personId: 1, leftAt: 1 })
+db.conversationParticipant.createIndex({ tenantId: 1, conversationId: 1 })
+```
+
+Constraint na `participant_type='proxy_for_minor'` ⇒ existencia platného `parentalAccess` sa kontroluje v `CourierService.addParticipant`. DB to nevie vynútiť cross-DB.
+
+### `message`
+
+```typescript
+const MessageSchema = z.object({
+  _id: z.instanceof(ObjectId),
+  tenantId: z.instanceof(ObjectId),
+  conversationId: z.instanceof(ObjectId),
+  authorPersonId: z.instanceof(ObjectId),
+  representedMinorId: z.instanceof(ObjectId).nullable(),
+  body: z.string().max(50000), // pre E2E je to ciphertext
+  replyToMessageId: z.instanceof(ObjectId).optional(),
+  attachments: z.array(z.object({
+    kind: z.enum(['image', 'pdf', 'docx', 'xlsx', 'other_document']),
+    url: z.string().url(),
+    filename: z.string(),
+    sizeBytes: z.number().int().positive(),
+    mimeType: z.string(),
+  })).default([]),
+  externalLinks: z.array(z.object({
+    url: z.string().url(),
+    ogPreview: z.object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+      image: z.string().url().optional(),
+    }).optional(),
+  })).default([]),
+  editedAt: z.date().optional(),
+  deletedAt: z.date().nullable(),
+  createdAt: z.date(),
+  schemaVersion: z.literal(1),
+});
+```
+
+**Indexy**:
+
+```javascript
+db.message.createIndex({ tenantId: 1, conversationId: 1, createdAt: -1 })
+db.message.createIndex({ tenantId: 1, authorPersonId: 1, createdAt: -1 })
+
+// TTL index pre retenciu — vypočíta sa per-conversation v aplikačnej vrstve
+// (žiadny TTL na collection level, retencia je per-conversation)
+```
+
+Prílohy a externé odkazy sú **embedded** v dokumente správy (nie v separátnej collection) — vždy sa čítajú s ňou, embedding tu šetrí jeden round-trip.
+
+### Real-time delivery
+
+Pri `send_message`:
+
+1. Servis vloží dokument do `db.message`
+2. Servis publikuje na Redis kanál `courier:conv:{conversationId}` JSON s message ID a metadátami
+3. Connected klienti (cez SSE) dostanú notifikáciu, vyžiadajú detail
+
+Tým je MongoDB a real-time vrstva oddelená — ak Atlas má replikačné zaostávanie, real-time delivery cez Redis funguje bez problému.
+
+## Doménový diagram
+
+Tu je vizuálne znázornenie troch logických vrstiev a ich vzťahov.
+
+```
+┌─ activity_registry ────────────────────┐  ┌─ activity_main ──────────────────┐
+│                                        │  │                                       │
+│  person ◄──────┬──── organizationMember │  │  mentoringCycle ──── mentoringSession │
+│       ▲        │              │         │  │       ▲                   │           │
+│       │        │              ▼         │  │       │                   │           │
+│       │        │        organization    │  │       │                   ▼           │
+│       │        │              │         │  │       │      mentoringSessionPrivateNote │
+│       │        │              ▼         │  │       │                               │
+│       │        │      organizationDomain│  │       │                               │
+│       │        │                        │  │       │                               │
+│       └─── parentalAccess               │  │  activityComment (polymorphic)        │
+│       │                                 │  │       │                               │
+│       │── license ──── (issuingOrgId)   │  │  auditLog                             │
+│       │                                 │  │                                       │
+│  codelist ── codelistValue              │  │  training, matchParticipation,        │
+│                                         │  │  medicalTreatment, ...                │
+└─────────────────────────────────────────┘  └───────────────────────────────────────┘
+
+┌─ activity_courier ──────────────────────┐
+│                                         │
+│  conversation ──┬── conversationParticipant
+│                 │                       │
+│                 └── message             │
+│                       │                 │
+│                       └── (embedded attachments, externalLinks) │
+│                                         │
+└─────────────────────────────────────────┘
+
+Cross-DB referencie sú via ObjectId (žiadny join, lookup v aplikačnej vrstve):
+  mentoringCycle.mentorPersonId  →  activity_registry.person._id
+  mentoringSession.cycleId       →  activity_main.mentoringCycle._id
+  message.authorPersonId         →  activity_registry.person._id
+```
+
+## Migrácie a seed dáta
+
+Pri prvej inicializácii systému sa spustia seed migrácie:
+
+1. **Codelists** — všetky `codelist` a `codelistValue` (s prekladmi pre SK + EN)
+2. **System tenant** — root tenant pre system-wide dáta (admin operácie)
+3. **JSON Schema validátory** — pre každú collection nastaviť validátor zo Zod schémy
+4. **Indexy** — všetky indexy uvedené v tomto dokumente
+
+Migračný systém: vlastný skript v `migrations/` priečinku, sekvenčne číslovaný (`0001-init.ts`, `0002-add-indexes.ts`, ...). Každý migračný skript je idempotentný a vie sa spustiť opakovane.
+
+Pri zmenách schémy:
+- **Pridanie nepovinného poľa** → len update Zod schémy + JSON Schema validátora, žiadna migrácia dát
+- **Zmena povinnosti / typu poľa** → migration job, ktorý najprv prejde existujúce dokumenty
+- **Premenovanie / rozdelenie collection** → samostatný plán, dokumentovaný v `ops/migrations.md`
+
+## Field-Level Encryption
+
+Pre **veľmi citlivé polia** (rodné číslo) zvažujeme MongoDB Client-Side Field Level Encryption (CSFLE). Implementačne:
+
+- Master key v cloud KMS (AWS KMS / GCP KMS / Azure Key Vault)
+- Data Encryption Keys (DEKs) zašifrované master key, uložené v `__keyVault` collection
+- Driver šifruje pole `identifierNational` pred zápisom, deep-šifruje pri čítaní
+
+CSFLE má nákladovú stránku (queries na šifrovanom poli sú obmedzené na `equality`), takže ho používame **len pre polia, ktoré sa cez ne nehľadá fulltextom**.
+
+## Nasleduje
+
+Pre API špecifikáciu MCP serverov pokračuj v [mcp-servers](mcp-servers).
+Pre väzbu na ltksolutions/sportup.sk pokračuj v [sportup-sk-integration](sportup-sk-integration).
+Pre špecifické moduly (mentoring, courier) pokračuj v [features/](features/).

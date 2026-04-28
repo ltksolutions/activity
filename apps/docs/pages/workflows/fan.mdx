@@ -1,0 +1,346 @@
+# Workflow — Fanúšik
+
+Tento dokument popisuje životný cyklus fanúšika v systéme — od prvotného záujmu, cez sledovanie obľúbených športovcov a klubov, až po angažovanú účasť na fanklubových aktivitách. Fanúšik je **najmenej regulovaná** kategória — bez licencie, bez profesionálnych povinností, ale aj **najpočetnejšia**.
+
+## Životný cyklus
+
+```
+Záujem o sport / klub / športovca
+    │
+    ▼
+Registrácia (voliteľná) ──── získa Person s primaryRole: 'fan'
+    │
+    ├──► Anonymné sledovanie (bez registrácie) — len verejný obsah
+    │
+    ├──► Registrovaný fanúšik — sledovanie, komentáre, hlasovania
+    │
+    ├──► Členstvo vo fanklube ──── získa OrganizationMember
+    │
+    └──► Aktívny fanklubový člen — výjazdy, akcie, broadcasty
+
+       Vedľajšie cesty:
+       ├── Self-block (zablokuje konkrétne osoby)
+       ├── Block zo strany športovca / klubu (porušenie pravidiel)
+       └── GDPR delete request
+```
+
+## Stupne angažovanosti
+
+Systém rozlišuje rôzne stupne angažovanosti, líšia sa funkciami:
+
+### Anonymný návštevník
+
+- Bez registrácie
+- Vidí len **verejný obsah** — verejné štatistiky, výsledky, profily klubov, broadcasty bez subscription
+- Nemôže komentovať, hlasovať, ani byť subscriberom v broadcastoch
+
+### Registrovaný fanúšik
+
+- `Person` so `primaryRole: 'fan'`
+- Email + heslo
+- Môže:
+  - Sledovať športovcov, kluby, súťaže (subscribe k broadcastom)
+  - Hlasovať (`fan_interaction` aktivity)
+  - Komentovať verejné aktivity
+  - Pridávať predikcie zápasov
+  - Zúčastniť sa kvízov
+
+### Člen fanklubu
+
+- Plus `OrganizationMember(role: 'fan_club_member')` v jednom alebo viacerých fanklubov
+- Plus všetky predošlé funkcie
+- Môže:
+  - Zúčastniť sa fanklubových výjazdov
+  - Mať prístup k súkromným fanklubovým broadcastom
+  - Komunikovať v `group` konverzáciách fanklubu
+  - Hlasovanie v interných záležitostiach fanklubu
+
+## Registrácia
+
+### Self-registration
+
+1. Fanúšik príde na verejný web alebo mobilnú aplikáciu
+2. Vyplní email, heslo, zvolí preferencie (športy, kluby na sledovanie)
+3. Vznikne `Person` so `primaryRole: 'fan'` a minimálnymi údajmi
+4. Žiadny synchronizácia s ltksolutions/sportup.sk projektom (fanúšikovia tam nie sú evidovaní — to je register profesionálov)
+
+### Pridanie do fanklubu
+
+1. Fanúšik nájde fanklub v zozname klubov / komunít
+2. Požiada o členstvo cez aplikáciu
+3. Admin fanklubu schváli (alebo automaticky pri otvorenom fanklube)
+4. Vznikne `OrganizationMember(orgId: <fanklub>, personId: <fanúšik>, role: 'fan_club_member')`
+
+### Verejné broadcasty bez registrácie
+
+Niektoré broadcasty môžu byť verejné (napr. tlačové vyjadrenia klubu). Anonymný návštevník vidí, ale nemôže reagovať / komentovať. Registráciou získa interaktivitu.
+
+## Hlavné aktivity
+
+### `fan_interaction` — Fanúšikovská interakcia
+
+Široká kategória, zahŕňa:
+
+```
+FanInteraction {
+  interactionType: 'vote' | 'prediction' | 'attendance' | 'reaction' | 'quiz_answer',
+  targetType: 'match' | 'athlete' | 'team' | 'event',
+  targetId,
+  occurredAt,
+  payload: { ... },  // špecifické per typ interakcie
+}
+```
+
+#### Príklady
+
+**Vote (hlasovanie):**
+```
+{
+  interactionType: 'vote',
+  targetType: 'athlete',
+  targetId: <athlete>,
+  payload: { category: 'man_of_the_match', matchId, vote_value: <athlete> }
+}
+```
+
+**Prediction (predikcia výsledku):**
+```
+{
+  interactionType: 'prediction',
+  targetType: 'match',
+  targetId,
+  payload: { home_score: 2, away_score: 1, scorers: [...] }
+}
+```
+
+**Attendance (návšteva):**
+```
+{
+  interactionType: 'attendance',
+  targetType: 'match',
+  targetId,
+  payload: { sector: 'A14', purchased_via: 'online', ticket_id: '...' }
+}
+```
+
+ACL: vlastné interakcie vidí fanúšik, agregované štatistiky vidí klub / športovec, individuálne hlasy sú typicky **anonymné voči verejnosti** (klub vidí "Petrovi dali 1023 hlasov", nie "Janko Mrkvička hlasoval za Petra").
+
+### `donation` — Dar (TBD pre fanúšikov)
+
+Niektorí fanúšikovia môžu darovať priamo cez aplikáciu — buď klubu, alebo špecifickému športovcovi. Detaily v [supporter](supporter), pretože to je primárne *podporovateľská* aktivita.
+
+### Komentáre pod verejnými aktivitami
+
+Komentáre sú zase polymorfné. Pod verejnou aktivitou (zápas, hlasovanie, news article — TBD) môžu fanúšikovia komentovať podľa pravidiel uvedených v [../acl/matrix-comments](/acl/matrix-comments):
+
+| Aktivita | Fanúšik R | Fanúšik W |
+|---|---|---|
+| `fan_interaction` (verejná) | ✓ | ✓ |
+| `match_participation` (verejný zápas) | ✓ | ✓ |
+| `donation` (ak je verejné) | ✓ | – |
+| `mentoring_session` | – | – |
+| `medical_treatment` | – | – |
+
+## Komunikácia
+
+### Direct chat
+
+Fanúšik **nemôže** iniciovať direct chat so športovcom alebo trénerom (z dohody). Výnimky:
+
+- Športovec si **otvorí DM** — napr. profesionálny športovec môže mať flag `acceptsFanDMs: true`
+- Po otvorení môže fanúšik napísať
+- Športovec môže kedykoľvek block-núť (`block_person`)
+
+### Fanklub group
+
+Členovia fanklubu sú v `group` konverzácii:
+
+- Diskusia o zápasoch, klube
+- Logistika výjazdov
+- Plánovanie akcií
+
+Admin fanklubu má **M** (moderation), môže odstraňovať urážlivé správy a banovať členov.
+
+### Klubové broadcasty
+
+Klubové oznámenia idú cez `broadcast`:
+
+- Subscriber-i sú fanúšikovia, ktorí sa prihlásili
+- Publisher-i sú media manageri klubu
+- Subscriber-i môžu reagovať (ak je broadcast nastavený s `allowReactions: true`), ale nemôžu publikovať
+
+## Špeciálne pravidlá pre fanúšikov
+
+### Žiadny prístup ku citlivým dátam
+
+Z dohody: fanúšik **nemá prístup** k:
+
+- Lekárskym záznamom
+- Mentoringu
+- Antidopingovým záznamom
+- Tréningovým plánom (interné klubové)
+- Hodnoteniam
+
+Vidí len:
+
+- Verejné výsledky a štatistiky
+- Verejne publikovaný obsah (klubové oznámenia, broadcasty)
+- Profily športovcov (verejná časť)
+- Verejné sociálne aktivity
+
+### Privacy pre samotného fanúšika
+
+Fanúšik má kontrolu nad:
+
+- Svojím profilom (verejný / len pre fanklub členov / súkromný)
+- Hlasovaniami (verejné / anonymné — anonymné je default pre väčšinu typov)
+- Komentármi
+
+Klub a športovec **nevidia** osobné údaje konkrétneho fanúšika (mail, telefón). Vidia len agregované štatistiky a tie hlasovania, ktoré fanúšik výslovne urobil verejné.
+
+### Block a moderácia
+
+Fanúšik môže:
+
+- **Self-block** inú osobu — `block_person(personId)`. Skryje obsah, neumožní DM od tej osoby
+- **Reportovať** komentár alebo správu — `report_message(messageId, reason)`
+
+Klub / športovec / admin môžu:
+
+- **Block fanúšika** v rámci svojho fanklubu — `OrganizationMember.endedAt` s reason
+- **Moderovať** komentáre fanúšika pod ich aktivitami
+- **Eskalovať** závažné porušenia na system admin
+
+## Postup angažovanosti
+
+Fanúšik môže časom prechádzať medzi stupňami:
+
+1. Začne ako anonymný návštevník
+2. Registruje sa, sleduje obľúbený klub
+3. Pridá sa do fanklubu
+4. Stane sa aktívnym členom (komentáre, hlasovanie, výjazdy)
+5. Niektorí prejdú do *podporovateľa* (financie, materiálna pomoc)
+
+Niektorí fanúšikovia môžu paralelne zastávať aj iné role:
+
+- **Bývalý hráč ako fanúšik** — `Person` má `OrganizationMember` ako `athlete` (skončené) a aj `fan_club_member` (aktívne)
+- **Fanúšik aj rodič** — fanúšik klubu, súčasne rodič mladého hráča
+- **Fanúšik aj sponzor** — fan klubu, ktorý má aj sponzorskú zmluvu (cez svoju firmu)
+
+## Reporty a štatistiky
+
+### Pre fanúšika
+
+Personálny dashboard:
+
+- Sledované kluby a športovci
+- História hlasovaní a predikcií
+- Účasť na zápasoch (attendance)
+- Aktivita vo fanklubu
+- Notifikácie
+
+### Pre klub
+
+Agregované štatistiky o fanúšikoch (anonymizované):
+
+- Počet aktívnych fanúšikov
+- Geografická distribúcia
+- Frekvencia komentárov
+- Predikčná presnosť
+- Návštevnosť zápasov (cez attendance interactions)
+
+Klub **nevidí** individuálne hlasovania, len agregáty.
+
+### Pre media manager
+
+- Engagement metriky pre broadcast komunikáciu
+- Reakcie na publikované obsahy
+- Fanklub statistiky
+
+## ACL pre fanúšika
+
+Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
+
+| Aktivita | Vlastná `fan_interaction` | Verejný zápas | Mentoring | Lekárske |
+|---|---|---|---|---|
+| R | ✓ | ✓ | – | – |
+| W | ✓ | ✓ (komentáre) | – | – |
+| E | ✓ | ✓ (vlastné) | – | – |
+
+## UI obrazovky
+
+### Dashboard fanúšika
+
+**Obsahuje:**
+- Najbližšie zápasy sledovaných klubov / športovcov
+- Najnovšie news (broadcasty)
+- Pripravované hlasovania a predikcie
+- Aktivita vo fanklubu
+- Notifikácie
+
+### Profil športovca / klubu (z fanúšikovej perspektívy)
+
+**Obsahuje:**
+- Verejná štatistika
+- News a broadcasty
+- Verejné aktivity (najlepšie zápasy, ocenenia)
+- Tlačidlo *"Sledovať"* (subscribe)
+- Tlačidlo *"Hlasovať"* (ak je aktívne hlasovanie)
+- Tlačidlo *"Komentovať"* (ak má aktívny účet)
+
+**Neobsahuje:**
+- Lekárske
+- Mentoring
+- Tréningové plány
+- Vnútorné hodnotenia
+
+### Detail zápasu
+
+**Obsahuje:**
+- Skóre, čas, miesto
+- Zostavy
+- Hodnotenia výkonov (po zápase)
+- Predikcie pred zápasom (s tlačidlom *"Pridaj svoju predikciu"*)
+- Hlasovanie *Hráč zápasu* (pred / počas / po)
+- Komentáre
+- Štatistiky (sport-specific)
+
+### Fanklub priestor
+
+**Obsahuje:**
+- Členská základňa (zoznam s aviarmi)
+- Najbližšie výjazdy
+- `group` chat
+- Broadcast od adminov fanklubu
+- Hlasovania o klubových záležitostiach
+
+## Notifikácie pre fanúšika
+
+| Udalosť | Notifikácia |
+|---|---|
+| Sledovaný športovec rozhodne o niečom významnom | email + push |
+| Nový zápas sledovaného klubu | email |
+| Klubový broadcast | email digest |
+| Aktivita vo fanklubu | push |
+| Predikcia výsledku (pred zápasom) | push |
+| Hlasovanie *Hráč zápasu* (po zápase) | push |
+| Mention v komentároch | email + push |
+
+Užívateľ má kontrolu — môže vypnúť ktorýkoľvek typ notifikácie.
+
+## Otvorené otázky
+
+1. **Anti-toxicita** — pri masívnej fanúšikovskej komunite hrozí toxické správanie. Plán: AI-podporovaná moderation, rate limity, automatické varovania pri opakovaných porušeniach.
+
+2. **Lojalitné programy** — body za aktivitu, odmeny, gamifikácia. Out-of-scope pre MVP, ale schéma to vie podporiť cez `fan_interaction` aktivity.
+
+3. **Anonymné vs identifikovateľné hlasovanie** — momentálne väčšina hlasovaní anonymná voči verejnosti, klub vidí len agregáty. Pri špecifických prípadoch (oficiálne hlasovanie *Atlét roka*) môže byť potrebná identifikácia. Toto sa rieši per-vote nastavenie.
+
+4. **Cross-platform fan ID** — fanúšik na Slovensku ↔ fanúšik v Česku. Cross-tenant access je TBD.
+
+5. **Tickety a vstupenky** — integrácia s ticketing platformami pre attendance tracking. Out-of-scope pre MVP.
+
+## Nasleduje
+
+Pre podporovateľa pokračuj v [supporter](supporter).
+Pre profesionálne kategórie pokračuj v [athlete](athlete), [coach](coach), [referee](referee), [medical](medical).

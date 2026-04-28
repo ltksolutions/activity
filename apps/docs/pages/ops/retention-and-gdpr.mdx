@@ -1,0 +1,367 @@
+# Retencia dát a GDPR
+
+Tento dokument popisuje, **ako dlho** systém uchováva dáta, **kedy** ich maže, a **ako** sa vykonávajú práva subjektov údajov podľa GDPR. Je referenčný pre vývojárov, právnu kontrolu a auditorov.
+
+## Princípy
+
+Systém eviduje veľa typov dát s rôznou citlivosťou a rôznymi právnymi nárokmi na uchovávanie:
+
+- **Identitné dáta** — meno, dátum narodenia, rodné číslo
+- **Komunikačné dáta** — správy v Courieri
+- **Aktivity** — tréningy, zápasy, mentoring sedenia
+- **Zdravotné dáta** — lekárske záznamy, výsledky vyšetrení
+- **Finančné dáta** — dary, sponzorstvá, transakcie
+
+Pre každý typ je iná retenčná politika a iné práva subjektu.
+
+## Retenčné politiky per typ dát
+
+### Person (identita)
+
+**Retencia:** kým je účet aktívny + 3 roky po deaktivácii.
+
+Po 3 rokoch sa **anonymizuje** (nie maže) — meno sa nahradí pseudoanonymným ID, kontakt zruší, ostatné polia zostávajú.
+
+Dôvod neukončenia kompletne: aktivity v ktorých vystupoval (zápasy, hodnotenia, dary) by stratili kontext. Anonymizácia zachová štatistický záznam, anonymizuje subjekt.
+
+```
+Person {
+  firstName: 'ANONYMIZED',
+  lastName: 'ANONYMIZED',
+  birthDate: <jan-1 of birth year, anonymized day>,
+  identifierNational: null,  // odstránené
+  email: null,
+  phone: null,
+  deletedAt: <date>,
+  anonymizedAt: <date>,
+}
+```
+
+### Organization
+
+**Retencia:** kým existuje. Po deaktivácii sa archivuje, dáta sa nemažú (aktivity v rámci nej zostávajú).
+
+### Activity záznamy (training, match, mentoring, etc.)
+
+**Retencia podľa typu:**
+
+| Typ aktivity | Retencia | Poznámka |
+|---|---|---|
+| `training` | 7 rokov | Štandard pre šport |
+| `match_participation` | navždy | Audit kariéry |
+| `match_evaluation` | navždy | Súčasť kariérnej dokumentácie |
+| `medical_treatment` | 20 rokov po skončení liečby | Slovenský zákon o zdravotnej starostlivosti |
+| `mentoring_session` | navždy | Súčasť kariérneho rozvoja |
+| `mentoring_cycle` (final eval) | navždy | Vrátane záverečného hodnotenia |
+| `education_event` | navždy | Vzdelávacie kredity nestarnú |
+| `donation` | 10 rokov | Daňové účely |
+| `antidoping_record` | 10 rokov | WADA štandard |
+| `incident_report` | 10 rokov | Bezpečnosť, súdne spory |
+| `fan_interaction` | 2 roky | Štandardný marketing data |
+
+### Courier správy
+
+**Retencia per organizácia + per konverzácia:**
+
+```
+Organization.defaultRetentionDays  // default 365
+  ↓ override
+Conversation.retentionDays         // môže byť dlhšia / kratšia
+```
+
+Po expirácii sa **správy mažú**, metadáta konverzácie zostávajú.
+
+Mentoringové konverzácie a konverzácie obsahujúce zdravotné info môžu mať predĺženú retenciu (manuálne adminom organizácie).
+
+### ActivityComment
+
+**Retencia:** rovnaká ako parent aktivita. Komentáre sa mažú, keď sa archivuje aktivita (alebo sa fyzicky zmaže pri retencii aktivity).
+
+### AuditLog
+
+**Retencia: 7 rokov** (GDPR štandard pre audit). TTL index na collection.
+
+Audit log obsahuje:
+- Prístupy ku citlivým záznamom
+- Moderation akcie
+- Login/logout udalosti (admin)
+- ACL zmeny
+
+Po 7 rokoch automatický cleanup.
+
+### Backup-y a replicate-y
+
+- **Live replikácia** (MongoDB Atlas replica set): 3 nody
+- **Point-in-time recovery**: 7 dní
+- **Daily snapshots**: 30 dní
+- **Weekly snapshots**: 12 mesiacov
+- **Monthly snapshots**: 7 rokov (long-term archiv)
+
+GDPR delete sa **musí prejaviť** vo všetkých backup-och pri ich obnove. Toto sa rieši cez audit ledger — pri každej obnove sa skontrolujú zmazaní userovia a aplikujú sa znova.
+
+## Práva subjektu údajov (GDPR)
+
+### 1. Právo na prístup (Article 15)
+
+Subjekt môže požiadať o **export všetkých svojich dát**.
+
+#### Implementácia
+
+`GET /api/v1/data-export` endpoint. Vyžaduje autentifikáciu. Vracia:
+
+```
+{
+  person: { ... },
+  activities: [
+    { type: 'training', ... },
+    { type: 'mentoring_session', ... },
+    ...
+  ],
+  conversations: [...],
+  messages: [...],
+  donations: [...],
+  // ... všetko, kde subjekt vystupuje
+}
+```
+
+Formát: JSON (default) alebo PDF (compiled report).
+
+#### Časová lehota
+
+GDPR vyžaduje odpoveď do 30 dní. Náš cieľ: **48 hodín** pre štandardné exporty (background job, email s linkou na stiahnutie).
+
+### 2. Právo na opravu (Article 16)
+
+Subjekt opravuje vlastné dáta cez **profil** v aplikácii. Pre údaje master-ované v sportup.sk (rodné číslo, oficiálne meno) ide cez **proposal flow** (viď [../04-sportup-integration](/sportup-sk-integration)).
+
+### 3. Právo na vymazanie (Article 17, "right to be forgotten")
+
+Subjekt môže požiadať o **zmazanie všetkých svojich dát**.
+
+#### Implementácia
+
+`POST /api/v1/data-delete-request` endpoint. Vytvorí `DataDeletionRequest`:
+
+```
+DataDeletionRequest {
+  personId,
+  requestedAt,
+  status: 'pending' | 'verified' | 'in_progress' | 'completed',
+  scope: 'full' | 'partial',
+  partialFields: [...],  // ak scope = 'partial'
+}
+```
+
+#### Workflow
+
+1. Subjekt podá žiadosť
+2. Admin organizácie verifikuje identitu (telefón / video / osobne)
+3. Po verifikácii sa spustí background job:
+   - **Anonymizuje** Person dokument
+   - **Maže** vlastné správy v Courieri
+   - **Anonymizuje** komentáre (autor → 'ANONYMIZED USER')
+   - **Anonymizuje** aktivity (subjekt → pseudoanonymné ID)
+   - **Maže** osobné notifikácie
+4. Po dokončení status `completed`, subjekt dostane potvrdenie
+
+#### Výnimky
+
+Niektoré dáta sa **nemažú** ani pri delete request:
+
+- **Lekárske záznamy** — slovenský zákon o zdravotnej starostlivosti vyžaduje 20-ročnú retenciu
+- **Antidopingové záznamy** — WADA štandard
+- **Finančné transakcie** — daňové účely (10 rokov)
+- **Audit log** — 7 rokov
+
+V týchto prípadoch sa dáta **anonymizujú** — subjekt ako osoba zmizne, štruktúra zostáva.
+
+#### Časová lehota
+
+GDPR vyžaduje 30 dní. Náš cieľ: **7 dní** od verifikácie.
+
+### 4. Právo na obmedzenie spracúvania (Article 18)
+
+Subjekt môže požiadať o **dočasné pozastavenie spracovania** (napr. počas sporu).
+
+V systéme: `Person.processingRestricted: boolean`. Pri `true`:
+
+- Všetky background jobs týkajúce sa subjektu sú pozastavené
+- Aktívne notifikácie sa nepustia
+- Aktivity sa stále zaznamenávajú (audit), ale nie sú spracovávané (analytics, reporty)
+
+### 5. Právo na prenosnosť (Article 20)
+
+Subjekt môže požiadať o **export v štruktúrovanom strojovo čitateľnom formáte**, ktorý môže odovzdať inému prevádzkovateľovi.
+
+Identické s právom na prístup, ale formát je striktne JSON podľa štandardizovanej schémy (TBD).
+
+### 6. Právo namietať (Article 21)
+
+Subjekt môže namietať proti spracovaniu pre účely marketingu (broadcast, propagácia). V systéme: profil → notifikačné preferencie → vypnúť.
+
+### 7. Právo nedisponovania automatizovaným rozhodovaním (Article 22)
+
+Pre AI-generated odporúčania (napr. *"AI navrhuje, že rozhodca X je pripravený na postup"*): tieto musia byť **transparentne označené** a **vždy prechádzajú cez ľudského schvaľovateľa** (predseda komisie). Žiadne plne automatizované rozhodnutia o subjektoch.
+
+## Implementácia retencie
+
+### Background jobs
+
+Denný cron job (02:00 UTC) prechádza tabuľky a aplikuje retenciu:
+
+```javascript
+// Pseudokód
+async function applyRetention() {
+  const orgs = await db.organization.find({});
+
+  for (const org of orgs) {
+    // Courier správy
+    await db.message.deleteMany({
+      conversationOrgId: org._id,
+      createdAt: { $lt: now - org.defaultRetentionDays days },
+    });
+
+    // Špecifické aktivity (per typ)
+    for (const policy of retentionPolicies) {
+      await applyPolicyForOrg(org, policy);
+    }
+  }
+
+  // Audit log TTL automaticky cez MongoDB TTL index
+}
+```
+
+### Anonymizácia
+
+Pri anonymizácii (deaktivácia + 3 roky alebo GDPR delete):
+
+```javascript
+async function anonymizePerson(personId) {
+  // Person
+  await db.person.updateOne(
+    { _id: personId },
+    {
+      $set: {
+        firstName: 'ANONYMIZED',
+        lastName: 'ANONYMIZED',
+        birthDate: getJan1OfBirthYear(person.birthDate),
+        identifierNational: null,
+        email: null,
+        phone: null,
+        anonymizedAt: now,
+      },
+    }
+  );
+
+  // Aktivity — subjekt zostáva, ale identifikátor sa zmení
+  // (ID dokumentu zostáva, len pole `personId` zostáva, no Person je anonymizovaný)
+
+  // Vlastné správy v Courieri (E2E už beztak nečitateľné, len metadát)
+  await db.message.updateMany(
+    { authorPersonId: personId },
+    { $set: { body: '[deleted]', authorAnonymized: true } }
+  );
+
+  // Vlastné komentáre
+  await db.activityComment.updateMany(
+    { authorPersonId: personId },
+    { $set: { body: '[deleted]', authorAnonymized: true } }
+  );
+
+  // Audit log o anonymizácii
+  await db.auditLog.insert({
+    action: 'anonymize_person',
+    targetType: 'person',
+    targetId: personId,
+    occurredAt: now,
+  });
+}
+```
+
+### Lekárske záznamy — anonymizácia, nie mazanie
+
+Pri delete request **subjektu, ktorý mal lekárske záznamy**:
+
+- `MedicalTreatment` dokumenty zostávajú
+- `personId` sa nahradí pseudoanonymizovaným ID (`anonymized_<hash>`)
+- Špecifické polia (rodné číslo) sa odstránia
+- Diagnóza a treatment ostávajú (potrebné pre štatistický a vedecký výskum)
+
+Toto je kompromis medzi GDPR a slovenským zákonom o zdravotnej starostlivosti.
+
+## Šifrovanie citlivých polí
+
+### CSFLE (Client-Side Field Level Encryption)
+
+Pre špecifické polia v MongoDB (rodné číslo, kompletná diagnóza) používame **CSFLE** — šifrovanie na strane klienta cez MongoDB driver.
+
+Princíp:
+
+- Master key v AWS KMS (alebo na-prem KMS)
+- Data encryption keys (DEKs) pre rôzne polia
+- Driver šifruje pred zápisom, dešifruje po čítaní
+- DBA ani admin DB nemá prístup k plain textu
+
+### Polia s CSFLE
+
+```typescript
+const Person_CsfleConfig = {
+  identifierNational: { encrypt: { algorithm: 'AEAD_AES_256_CBC_HMAC_SHA_512-Random' } },
+};
+
+const MedicalTreatment_CsfleConfig = {
+  diagnosis: { encrypt: { algorithm: 'AEAD_AES_256_CBC_HMAC_SHA_512-Random' } },
+  detailedNotes: { encrypt: { algorithm: 'AEAD_AES_256_CBC_HMAC_SHA_512-Random' } },
+};
+```
+
+## Audit pre GDPR compliance
+
+### Pravidelné audity
+
+Mesačný report pre právne oddelenie:
+
+- Počet `DataDeletionRequest` (pending, completed)
+- Priemerný čas spracovania
+- Anomálie v retencii (nečakane staré záznamy, zlyhané cleanups)
+- Prístupy k citlivým záznamom (top 10 admin accessors)
+
+### External audit
+
+Ročný external GDPR audit certifikovanou firmou. Plánovaný od roku 2027 (po MVP a stabilizácii).
+
+## Cross-tenant izolácia
+
+Multi-tenancy znamená, že dáta jedného tenanta sú fyzicky v rovnakej databáze ako iného. **Tenant scope musí byť aplikovaný na úrovni každého query.**
+
+Implementácia:
+
+```typescript
+// V repository layer
+class PersonRepository {
+  async findById(id: ObjectId, tenantId: ObjectId): Promise<Person | null> {
+    return this.collection.findOne({ _id: id, tenantId });
+  }
+  // tenantId je VŽDY v každom query
+}
+```
+
+V code review je toto kontrolované — `Person.findOne` bez `tenantId` je porušenie.
+
+## Otvorené otázky
+
+1. **Dáta v 3rd party službách** — emaily v Postmark, push notifikácie cez Apple/Google. Tieto majú vlastnú retenciu. Pri GDPR delete musíme zaslať delete request aj im.
+
+2. **Backup-y a delete request** — ak subjekt podá delete request a dáta sú v 7-rokovom monthly backup, pri obnove backupu sa subjekt znovu objaví. Riešenie: **deletion ledger** v separátnej databáze, ktorá pri obnove backup-u znovu aplikuje delete operations.
+
+3. **Cross-jurisdiction transfers** — ak slovenský klub pošle dáta do českého (zahraničný klub), je to transfer mimo SK. EU GDPR to umožňuje, mimo EU vyžaduje SCC alebo iný mechanizmus.
+
+4. **AI training data** — môžeme používať dáta na fine-tuning AI modelov? Pre MVP **nie**. V budúcnosti len s explicitným opt-in od subjektu.
+
+5. **Right to explanation** (Article 22) — pri AI rozhodnutiach. Plánujeme transparentnosť cez *"Prečo systém navrhol toto?"* expand pri každom AI suggesion.
+
+## Nasleduje
+
+Pre deployment a infraštruktúru pokračuj v [deployment](deployment).
+Pre rate limity pokračuj v [rate-limits](rate-limits).
+Pre Atlas Search pokračuj v [atlas-search](atlas-search).

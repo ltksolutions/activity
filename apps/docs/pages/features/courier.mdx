@@ -1,0 +1,454 @@
+# Courier
+
+Tento dokument popisuje Courier — komunikačný subsystém systému. Courier slúži pre **chat 1:1 a skupinové konverzácie naprieč všetkými rolami** v systéme. Mentor s mentee, tréner s tímom, klub s rodičmi, zväz s licencovanými členmi. Je to samostatný MCP server (`courier-mcp`) s vlastnou databázou, vlastnou retenciou a vlastnou bezpečnostnou architektúrou.
+
+## Filozofia: generický komunikačný subsystém
+
+Courier nie je viazaný na žiadny konkrétny modul aplikácie. Je to **infraštruktúrna vrstva**, ktorú využívajú všetky ostatné moduly:
+
+- mentor ↔ mentee aktívneho cyklu
+- tréner ↔ športovec v rovnakom klube
+- tréner ↔ rodič mládežníckeho zverenca
+- klubový lekár ↔ športovec klubu
+- realizačný tím okolo športovca
+- tímová skupina (tréner + hráči alebo proxy rodičia)
+- klub → rodičia (broadcast oznamy)
+- zväz → licencovaní rozhodcovia (broadcast)
+- media manager → fanklub (broadcast)
+- komisia rozhodcov medzi sebou (group)
+- predseda komisie ↔ konkrétny rozhodca
+
+Každý prípad je len iná kombinácia *typu konverzácie* + *účastníkov* + *roly každého účastníka*.
+
+## Tri typy konverzácie
+
+### `direct` — 1:1 chat
+
+Presne dvaja účastníci. Tretí sa nedá pridať (treba vytvoriť novú `group`). End-to-end šifrované — server vidí len ciphertext.
+
+**Použitie:** mentor ↔ mentee, tréner ↔ športovec, lekár ↔ športovec, rodič ↔ tréner mládeže, dvaja kamaráti zo zväzu.
+
+### `group` — skupinový chat
+
+3+ účastníkov, všetci píšu a čítajú. Voliteľne admin/moderátor. Server-side šifrované (encryption at rest), nie E2E — admin musí mať prístup pre moderation.
+
+**Použitie:** tím v ročníku U15, klubový realizačný tím, skupina rozhodcov pre konkrétnu súťaž, rodičovská skupina klubu.
+
+### `broadcast` — jednosmerný kanál
+
+Málo *publisherov*, veľa *subscriberov*. Subscriberi čítajú, prípadne reagujú v komentárovom móde, ale nepíšu do hlavného toku.
+
+**Použitie:** media manager → fanklub, zväz → licencovaní rozhodcovia, klub → rodičia, podporovateľ → športovci, ktorých sponzoruje.
+
+## End-to-end šifrovanie
+
+E2E je zapnuté **iba pre `direct` konverzácie**. Pre `group` a `broadcast` má server prístup k plain textu (potrebné pre moderation, retenciu, audit).
+
+### Implementačná vrstva (skratený popis)
+
+- Pri vytvorení direct konverzácie obaja klienti vygenerujú key pair
+- Verejné kľúče sa uložia v `Conversation` metadátach
+- Každá správa je šifrovaná verejným kľúčom druhej strany
+- Server vidí len `body: ciphertext`
+- Klienti dešifrujú lokálne, ukladajú do lokálnej kópie
+- Vyhľadávanie v E2E správach beží **na klientovi**, nie na serveri
+
+### Dôsledky
+
+- Server **nemôže** poskytovať rich preview, OG-embed, full-text search v `direct` správach
+- Externé odkazy v `direct` správach sa nedajú parsovať na serveri (klient zobrazuje len URL)
+- Strata kľúčov = strata histórie (zatiaľ bez recovery flow; v budúcnosti zvážiť key escrow s explicitným opt-in)
+
+Constraint v schéme: `conversation.e2eEnabled = true ⇔ conversation.kind = 'direct'` (vynútené v Zod refine + JSON Schema validátore).
+
+## Účastníctvo
+
+### `ConversationParticipant` — typy
+
+Každý účastník v konverzácii má `participantType`, ktorý určuje *kontext*, v ktorom sa zúčastňuje:
+
+| Typ | Význam |
+|---|---|
+| `direct` | sám za seba |
+| `proxy_for_minor` | rodič zastupujúci dieťa |
+| `staff` | tréner, lekár, manažér v tímovej konverzácii |
+| `observer` | read-only (napr. metodik klubu, predseda komisie) |
+
+### Roly v konverzácii
+
+Naviac k typu má účastník **rolu** v konverzácii:
+
+| Rola | Môže |
+|---|---|
+| `member` | čítať, písať (typický účastník v `group`) |
+| `admin` | čítať, písať, pridávať/odoberať účastníkov, archivovať konverzáciu |
+| `publisher` | písať do `broadcast` (média, zväz, ...) |
+| `subscriber` | len čítať `broadcast` |
+
+### Proxy účastníctvo pre maloletých
+
+Toto je špeciálny prípad — rodič v tímovom chate U13 vystupuje **ako zástupca svojho dieťaťa**, nie sám za seba.
+
+```
+ConversationParticipant {
+  conversationId: <chat U13>,
+  personId: <Peter Novák, otec>,
+  representedMinorId: <Adamko Novák, dieťa>,
+  participantType: 'proxy_for_minor',
+  role: 'member',
+}
+```
+
+UI zobrazuje meno ako *"Peter Novák (rodič Adamka)"* — odvodené v render-čase z týchto dvoch ID.
+
+### Pravidlá pre proxy
+
+- Existencia záznamu `ParentalAccess` (rodič → minor, valid_until > now()) je **podmienkou** pre vytvorenie proxy účastníctva (vynútené v `CourierService.addParticipant`)
+- Vekový prah, kedy dieťa vstupuje samostatne (a nie cez proxy), je `Organization.minorSelfJoinAge` (default 16) — parametrizované per organizácia
+- V deň 18. narodenín dieťaťa:
+  1. `ParentalAccess.validUntil` vyprší
+  2. background job nájde proxy účastníctva, prepne ich na `read-only` na 30 dní
+  3. po 30 dňoch sa rodičovské proxy odpojí
+  4. dieťa dostane pozvánku ako `direct` účastník (do plnoletosti nemalo vlastný prístup)
+- Maloleté dieťa **nemá retroaktívny prístup** k tímovým chatom z detstva po dosiahnutí plnoletosti — historický archív zostáva uzavretý (klub môže manuálne poskytnúť export PDF na žiadosť)
+
+### Viacdetné rodiny
+
+Ak má rodič dve deti v rovnakom tíme, potrebuje *dva* `ConversationParticipant` záznamy v tej istej konverzácii — jeden ako proxy pre Adamka, druhý pre Janka. Preto má primárny kľúč tvar `(conversationId, personId, representedMinorId)`.
+
+### Rozvedení rodičia s konfliktom
+
+`ParentalAccess.restricted: boolean` umožňuje označiť, že súd zúžil prístup jedného z rodičov. ACL middleware berie tento flag do úvahy. Default je `false` (oboje rodičia majú rovnaký prístup), zmenu robí len admin organizácie na základe dokumentu.
+
+## Pravidlá iniciovania konverzácií
+
+Otvorené konverzácie majú riziko spamu a obťažovania. Defaultné pravidlá, kto smie iniciovať direct alebo group konverzáciu s kým:
+
+| Iniciátor → cieľ | Default |
+|---|---|
+| Mentor → mentee aktívneho cyklu | povolené |
+| Mentee → mentor aktívneho cyklu | povolené |
+| Tréner → športovec v rovnakom klube | povolené |
+| Tréner → rodič-proxy svojho zverenca | povolené |
+| Rodič-proxy → tréner svojho dieťaťa | povolené |
+| Lekár klubu → športovec klubu | povolené |
+| Športovec ↔ športovec (toho istého klubu) | povolené |
+| Športovec ↔ športovec (rôzne kluby) | opt-in (B musí otvoriť DM) |
+| Fanúšik → športovec | **zatvorené** (kým si profesionál neotvorí DM) |
+| Fanúšik → fanúšik | povolené (s blokovacím právom) |
+| Admin zväzu → ktorýkoľvek licencovaný člen | povolené (oznámenia) |
+| Externý mentor → mentee priradeného cyklu | povolené |
+| Sponzor/podporovateľ → športovec | **zatvorené** (cez klub ako sprostredkovateľa) |
+
+ACL pravidlá sú v [acl/matrix-courier](/acl/matrix-courier), implementované v `CourierService.canInitiateConversation()`.
+
+## Retencia
+
+### Princíp
+
+Konverzácie nemajú nekonečnú životnosť. Po uplynutí retenčnej lehoty sa **správy mažú**. Metadáta konverzácie zostávajú (pre audit kto kedy vytvoril konverzáciu), ale obsah ide preč.
+
+### Hierarchia retencie
+
+```
+Default: Organization.defaultRetentionDays (default 365)
+  ↓ override per-conversation
+Conversation.retentionDays (môže byť pre konkrétnu konverzáciu predĺžená)
+```
+
+Admin organizácie nastavuje default. Default rok je vyvážený kompromis — neformálny tímový chat sa po sezóne sám upracťuje, audit je dostatočný.
+
+### Špecialne retencie
+
+Niektoré konverzácie majú **dlhšiu retenciu** než org default:
+
+- **Mentoringové konverzácie** — pri ukončení cyklu (`completed`) sa odporúča predĺžiť retenciu, aby kontext prežil rovnako dlho ako záverečné hodnotenie. Toto je manuálny krok admin organizácie.
+- **Konverzácie obsahujúce zdravotné informácie** — môžu vyžadovať dlhšie retencie podľa zákona o zdravotnej starostlivosti
+- **Konverzácie s evidenciou prvého kontaktu** (sponzorské) — majú zmluvný význam
+
+### Implementačne
+
+Žiadny TTL index na collection level (retencia je per-conversation). Background job (denne):
+
+```javascript
+db.message.deleteMany({
+  conversationId: <id>,
+  createdAt: { $lt: ISODate(now - retentionDays days) }
+})
+```
+
+Pred mazaním dôjde k **export** funkcii — admin môže exportovať konverzáciu do PDF/JSON pre archiv.
+
+### Príklad
+
+```typescript
+// SFZ Komisia rozhodcov nastaví default 1 rok
+organization.defaultRetentionDays = 365;
+
+// Konverzácia mentor-mentee aktívneho cyklu
+conversation.retentionDays = 365; // dedí default
+
+// Po ukončení cyklu admin manuálne predĺži
+conversation.retentionDays = 365 * 5; // 5 rokov
+
+// Po 5 rokoch retencia vyprší, správy sa zmažú,
+// metadáta konverzácie a audit log zostávajú
+```
+
+## Notifikácie
+
+### Kanály
+
+- **Email digest** — predvolene zapnutý, súhrn nepochytených správ raz za 24 h (alebo iný interval)
+- **Email okamžitý** — každá nová správa (default vypnuté pre group, default zapnuté pre direct)
+- **Push notifikácia** (mobilná appka, neskôr) — okamžitá, opt-out možnosť
+
+Užívateľ si v profile nastavuje preferencie per-konverzáciu. Default sady sú konzervatívne, aby nezahltili.
+
+### Do Not Disturb (DND)
+
+`ConversationParticipant.dndActive: boolean` — užívateľ stíši konverzáciu (žiadne notifikácie, len badge v UI). Funguje **len pre `group` a `broadcast`** — pre `direct` 1:1 by tichá zóna nedávala zmysel (buď tam si, alebo nie).
+
+Constraint v schéme: `dndActive` nemôže byť `true` pre účastníka v konverzácii s `kind = 'direct'`.
+
+### Globálny DND
+
+Užívateľ si vie nastaviť globálne *DND okno* (napr. *"od 22:00 do 7:00 ticho"*) v profile. Aplikuje sa na všetky kanály okrem urgent (alarm, krízové).
+
+## Prílohy
+
+### Povolené typy
+
+- **Obrázky** (JPG, PNG, WebP, HEIC, AVIF, SVG)
+- **Dokumenty** (PDF, DOCX, XLSX, PPTX)
+- **Iné dokumenty** (TXT, CSV, ZIP — `other_document`)
+
+### Zakázané typy
+
+- **Video** — žiadne natívne uploady. Pre video sa použije **odkaz** (`externalLinks`) — YouTube, Vimeo, vlastný hosting. Server pri odkaze parsuje OG metadáta (title, description, thumbnail) ak sa dá.
+
+Dôvody:
+- storage cost (video je 100x väčšie než obrázky)
+- právne riziká (redistribúcia copyrighted material)
+- bandwidth — pri ranom nasadzovaní MVP nestačíme servovať video v acceptable rate
+
+### Limity
+
+- **Max veľkosť súboru:** 25 MB
+- **Max súborov na správu:** 5
+- **Max odkazov na správu:** 10
+- **Storage:** S3-kompatibilný, signed URLs s expiry pre čítanie
+
+### Implementačne
+
+Prílohy sú **embedded** v dokumente `Message` (pole `attachments[]`) — vždy sa čítajú spolu so správou, separate collection by len pridala join. Súbory samotné sú v S3, v dokumente len metadáta + URL.
+
+## Most do mentoringu
+
+V Courieri si mentor a mentee môžu kedykoľvek napísať. Niekedy z chatu vznikne diskusia, čo si zaslúži formálny záznam ako mentoring sedenie. Funkcia *"Vytvoriť sedenie z týchto správ"*:
+
+1. Mentor v Courieri označí dve správy (od → po)
+2. Klikne *"Vytvoriť sedenie z týchto správ"*
+3. Otvorí sa formulár sedenia s predvyplnenými poľami:
+   - `linkedConvId`, `rangeStartMsgId`, `rangeEndMsgId`
+   - `summary` môže predvyplniť AI z obsahu správ (opt-in)
+4. Mentor doplní zvyšné polia a uloží
+
+V detaile sedenia sa zobrazuje read-only embed s rozsahom správ z Courieru.
+
+Detaily v [mentoring](mentoring).
+
+## Most do iných modulov
+
+Princíp je rovnaký aj pre iné moduly — ktokoľvek (kto má autorizáciu) môže prepojiť rozsah Courier správ s nejakou aktivitou:
+
+```typescript
+link_message_range_to_activity(input: {
+  conversationId: string,
+  startMessageId: string,
+  endMessageId: string,
+  activityType: string,    // "medical_treatment", "training", "incident_report", ...
+  activityId: string,
+}): void
+```
+
+Príklady:
+- klubový lekár pri vytváraní `MedicalTreatment` záznamu prepojí chat o symptómoch
+- tréner pri vytváraní hodnotenia zo zápasu prepojí chat z half-time prestávky
+- delegát pri vytváraní *incident report* prepojí chat o spornej situácii
+
+## Real-time delivery
+
+### Server-Sent Events (SSE) ako primárny mechanizmus
+
+```
+Klient → GET https://courier-mcp.activity.sportup.sk/sse/conversations/{id}
+         Authorization: Bearer ...
+         Accept: text/event-stream
+```
+
+Server posiela udalosti:
+
+```
+event: message.created
+data: {"messageId": "...", "authorPersonId": "...", "createdAt": "..."}
+
+event: message.edited
+data: {"messageId": "...", "editedAt": "..."}
+
+event: typing.started
+data: {"personId": "..."}
+
+event: participant.added
+data: {"participantId": "...", "personId": "..."}
+```
+
+Klient po `message.created` vyžiada detail správy (čo zachytí ACL gate).
+
+### Implementačne — Redis Pub/Sub
+
+Pri `send_message`:
+
+1. Servis vloží dokument do `db.message`
+2. Servis publikuje na Redis kanál `courier:conv:{conversationId}` JSON s message ID a metadátami
+3. SSE handlery (Node.js procesy bežiace ako horizontálne škálované workery) sú subscribed na všetky `courier:conv:*` kanály a doručujú udalosti pripojeným klientom
+
+Tým je real-time delivery **oddelená od MongoDB** — ak Atlas má replikačné zaostávanie, real-time delivery cez Redis funguje bez problému.
+
+### Prečo SSE namiesto WebSocket
+
+- Jednoduchšia implementácia (HTTP-natívne, žiadny upgrade handshake)
+- Funguje cez všetky HTTP proxies a load balancery
+- Klient sa znovu pripojí automaticky pri výpadku
+- Stratíme bidirectional komunikáciu — ale klient posiela správy cez normálny POST, takže to nie je obmedzenie
+
+## Moderation
+
+### Reportovanie
+
+Ktorýkoľvek účastník konverzácie môže nahlásiť správu:
+
+```typescript
+report_message(messageId: string, reason: string): { reportId: string }
+```
+
+Hlásenie ide do queue pre admin organizácie (vlastnícu konverzácie). Admin vidí kontext, rozhoduje o ďalšom postupe.
+
+### Akcie admina
+
+- **Skryť správu** — soft-delete s viditeľným *"Tato správa bola odstránená moderátorom"* (audit log, dôvod uvedený)
+- **Varovať autora** — notifikácia s dôvodom
+- **Suspendovať autora** v konverzácii — odoberie `ConversationParticipant`, autor sa nedá späť pridať bez súhlasu admina
+- **Eskalácia** — predať vyššiemu adminovi (zväz, system admin)
+
+Všetky moderation akcie sú v audit logu.
+
+### Blind moderation pre lekárske
+
+Ak je nahlásená správa v konverzácii s lekárskym kontextom, admin organizácie môže správu *odstrániť*, ale **obsah neuvidí**. To je už pokrývané našou ACL maticou — lekárske záznamy sú prístupné len medical role + samotnému subjektu.
+
+### Self-blocking
+
+Užívateľ si vie zablokovať inú osobu (`block_person(personId)`):
+
+- Skryje správy danej osoby pre seba (vlastné správy ostatným zostávajú viditeľné)
+- Zablokuje iniciovanie nových direct konverzácií od danej osoby
+- Symetria: Druhá strana nedostane info, že bola zablokovaná (privacy)
+
+## Rodičovský prístup
+
+Tu sa vraciame k otázke z minula: **rodič vidí lekárske záznamy svojho dieťaťa kompletne**. Pre Courier to znamená:
+
+### Direct konverzácie dieťa ↔ odborník
+
+Maloleté dieťa nemá vlastný prístup do aplikácie (pred `minorSelfJoinAge`), takže direct konverzácia dieťa ↔ odborník v tomto období neexistuje. Všetka komunikácia ide cez rodiča-proxy.
+
+Po dovŕšení `minorSelfJoinAge` (napr. 16) môže dieťa mať vlastný účet a vlastné konverzácie. V tom prípade:
+
+- Rodič **má read-only prístup** do `direct` konverzácií dieťaťa s odborníkmi (tréner, lekár, mentor) až do plnoletosti dieťaťa
+- Rodič **nemá prístup** do `direct` konverzácií dieťaťa s rovesníkmi alebo skupinových chatov dieťaťa
+- Dieťa dostáva v UI vidieť jasný indikátor *"Rodič číta tieto konverzácie"*
+
+V deň 18. narodenín rodičovský read-only prístup zaniká automaticky.
+
+## ACL — kompaktná matica
+
+| Typ konverzácie ↓ \ Rola → | Účastník (direct) | Proxy-rodič | Plný člen (group) | Proxy-rodič (group) | Admin (group) | Publisher (broadcast) | Subscriber (broadcast) | Externý hosť | Admin organizácie |
+|---|---|---|---|---|---|---|---|---|---|
+| **Direct (1:1)** | R W E | R (read-only) | – | – | – | – | – | – | – (E2E) |
+| **Group** | – | – | R W E | R W E | R W E A M | – | – | R W (ak pridaný) | R (audit) |
+| **Broadcast** | – | – | – | – | – | R W E A | R | – | R |
+| **Mentoring konverzácia** | R W E | – | – | – | – | – | – | R W E (ak priradený) | R (audit) |
+
+Operácie: **R**ead, **W**rite, **E**dit own, **A**dmin (pridať/odobrať účastníkov), **M**oderate (cudzie správy).
+
+Detailne v [acl/matrix-courier](/acl/matrix-courier).
+
+## UI obrazovky
+
+Konkrétne mockupy budú v [ui/mockups](/ui/mockups). V skratke:
+
+### Inbox
+
+**Účel:** prehľad všetkých konverzácií osoby.
+
+**Obsahuje:**
+- Vyhľadávanie (vlastné konverzácie po názve, účastníkovi)
+- Filter: všetky, neprečítané, s prílohami, archivované
+- Zoznam konverzácií zoradený podľa poslednej správy
+- Per-položku: avatar + meno (alebo skupinový názov), posledná správa, čas, počet neprečítaných, DND indikátor
+- Tlačidlo *Nová konverzácia*
+
+### Detail konverzácie
+
+**Účel:** chat view.
+
+**Obsahuje:**
+- Hlavička: meno konverzácie / účastníka, počet členov (pre group), DND toggle, dropdown: nastavenia konverzácie, archivovať, opustiť
+- Hlavné okno so správami (chronologicky, najstaršie hore)
+- Per-správa: avatar autora, meno (s proxy štítkom ak relevantné), čas, body, prílohy/odkazy, reactions, reply-to
+- Indikátor *"X píše..."*
+- Input pole: text, attach, send
+
+### Nastavenia konverzácie
+
+**Účel:** moderation a admin akcie.
+
+**Obsahuje:**
+- Zoznam účastníkov s ich rolami, možnosť admin pridať/odobrať
+- DND toggle (kde aplikovateľné)
+- Retention nastavenie (admin)
+- Export konverzácie (admin)
+- Archivovať konverzáciu (admin)
+
+## Implementačné body
+
+### Stack
+
+- **Fastify** + `@modelcontextprotocol/sdk` (MCP server)
+- **Native MongoDB driver** (bez ORM)
+- **Zod** pre validáciu
+- **Redis Pub/Sub** pre real-time
+- **SSE plugin** pre Fastify (server-sent events)
+- **node-rdkafka** alebo **Redis Streams** zvážené pre durable event log v budúcnosti
+
+### Špecialne pre Courier
+
+- Vysoká frekvencia zápisov — collection `message` má agresívny indexing strategy
+- TTL na audit log (7 rokov), na konverzácie nie (riadené per-conversation `retentionDays`)
+- Connection limity — SSE handler má limit pripojení per-IP a per-user
+- Heartbeat každých 30 s (SSE comment riadok) — keep-alive proti load balancer timeoutu
+
+## Otvorené otázky pre budúce iterácie
+
+1. **Voice messages** — momentálne nepodporované. Zvažovať ak používatelia preferujú (najmä pre tréner ↔ mladší zverenec).
+2. **Reactions na správy** — emoji shortname-based, schéma to vie zachytiť, UI je TBD pre MVP.
+3. **Threadovanie** — momentálne `replyToMessageId` v ploškej štruktúre. Zanorené vlákna ako Slack zatiaľ nie.
+4. **Translation** — chat naprieč jazykmi (napr. mentor SK, mentee EN) by mohol mať on-demand preklad správ. Privacy implikácie pri E2E komplikované — odložené.
+5. **Channel pinning** — pripínanie dôležitých konverzácií v inboxe.
+
+## Nasleduje
+
+Pre polymorfné komentáre pokračuj v [activity-comments](activity-comments).
+Pre proxy účastníctvo detailne pokračuj v [parental-proxy](parental-proxy).
+Pre ACL matice pokračuj v [../acl/matrix-courier](/acl/matrix-courier).

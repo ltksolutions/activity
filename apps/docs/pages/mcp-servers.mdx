@@ -1,0 +1,818 @@
+# MCP servery — API špecifikácia
+
+Tento dokument popisuje API troch MCP serverov: ich resources, tools, scope-y, error handling a autentifikačný model. Je referenčný — implementácia v Node.js/Fastify a klientske volania sa naňho odvolávajú.
+
+## Čo je MCP a prečo ho používame
+
+[Model Context Protocol](https://modelcontextprotocol.io) je otvorený štandard pre komunikáciu medzi AI agentmi (typicky LLM-based) a backend systémami. Pôvodne navrhnutý ako rozhranie pre Claude a ďalšie LLM-y, dnes je to univerzálny protokol pre tooling.
+
+Pre tento systém je MCP **primárne API rozhranie**. REST API existuje (cez `api.activity.sportup.sk`), ale je to v podstate REST proxy nad MCP servermi, nie samostatná vrstva.
+
+Prečo MCP-first prístup:
+
+- **Natívne pre AI integráciu** — používatelia v budúcnosti budú interagovať s aplikáciou cez AI asistenta (*"Claude, zaznamenaj sedenie z dnešného mentoring s Tomášom"*). MCP toto rieši priamo.
+- **Štruktúrované discovery** — MCP klient sa pýta servera *"aké tools máš?"*. Žiadne ručné OpenAPI dokumenty, ktoré sa rozchádzajú s realitou.
+- **Resources sú first-class** — narozdiel od REST kde GET je len konvencia, MCP rozlišuje `resources` (read-only) od `tools` (operácie).
+- **Permissions a scopes** sú zabudované v protokole.
+
+### MCP koncepty (skrátený slovník)
+
+| Koncept | Čo to je | Príklad |
+|---|---|---|
+| **Resource** | URI-identifikovateľný objekt, read-only | `registry://persons/abc123` |
+| **Tool** | Pomenovaná operácia s parametrami a návratovou hodnotou | `register_person(firstName, lastName, ...)` |
+| **Prompt** | Predpripravená šablóna pre AI konverzáciu (zriedka používané) | — |
+| **Scope** | Granulárna autorizačná hodnota | `registry.read`, `activity.write` |
+
+### Spoločné vlastnosti všetkých našich MCP serverov
+
+- **Transport:** HTTP/SSE (Server-Sent Events) — nie WebSocket. Stateless, dobre cache-ovateľné, kompatibilné s load balancermi.
+- **Autentifikácia:** OAuth 2.1 / OIDC s `auth.activity.sportup.sk` ako provider. Access token je JWT s claims `sub` (Person ID), `tnt` (tenant ID), `scp` (scopes).
+- **Rate limiting:** per token + per IP. Limity sú v `ops/rate-limits.md` (TBD).
+- **Errors:** štandardný MCP error formát (kód, message, data), ale obohatený o naše enum-ové chyby (viď nižšie).
+- **Tracing:** každý request má `traceId` v response headers, prepojený s OpenTelemetry traces.
+- **Multi-tenancy:** každý request má povinný tenant scope cez `tnt` claim v tokene; servery nikdy nesprístupnia dáta z iného tenantu.
+
+## Autentifikácia a autorizácia
+
+### Tok získania tokenu
+
+```
+1. Klient (web app, mobile, AI agent) presmeruje na auth.activity.sportup.sk
+2. Užívateľ sa prihlási, schváli scopes (napr. "Activity.app chce: activity.read activity.write")
+3. auth.activity.sportup.sk vráti authorization code
+4. Klient vymení code za access token + refresh token
+5. Access token použije v hlavičke: Authorization: Bearer eyJ...
+```
+
+### Scope hierarchia
+
+Scope sa skladá z `<server>.<operation>`:
+
+| Scope | Význam |
+|---|---|
+| `registry.read` | Čítať registre (osoby, organizácie, licencie, číselníky) |
+| `registry.write` | Modifikovať registre (vyžaduje admin rolu na úrovni org) |
+| `registry.admin` | System-wide administrácia (cross-tenant) |
+| `activity.read` | Čítať aktivity, kde je užívateľ účastníkom alebo má autorizovaný vzťah |
+| `activity.write` | Vytvárať a editovať vlastné aktivity |
+| `activity.moderate` | Moderation komentárov a aktivít v rámci spravovanej organizácie |
+| `courier.read` | Čítať konverzácie, ktorých je účastníkom |
+| `courier.write` | Posielať správy v konverzáciách |
+| `courier.admin` | Spravovať broadcast a group konverzácie organizácie |
+
+Scope je **horný strop** — autorizačná vrstva ďalej rozhoduje na základe ACL pravidiel (kto je účastník konverzácie, kto je v cykle, atď.).
+
+### Autorizačná vrstva v MCP serveri
+
+```
+Request príde →
+  1. JWT validácia (signature, expiry, audience)
+  2. Tenant scoping: request.tenantId = token.tnt
+  3. Scope check: má token požadovaný scope?
+  4. ACL check: má person konkrétne práva na konkrétny resource?
+  5. Audit log (pre citlivé operácie)
+  6. Spustenie business logiky cez servisnú vrstvu
+```
+
+Bez všetkých 4 + 6 fáz operácia neprejde. Toto je centralizované v Fastify hookoch — vývojár, ktorý pridáva nový tool, dostane autorizáciu zadarmo, musí len zadať scope a ACL pravidlá.
+
+## registry-mcp
+
+Autoritatívne registre. Beží na `registry-mcp.activity.sportup.sk`.
+
+### Resources
+
+| URI | Vracia | Scope |
+|---|---|---|
+| `registry://persons/{id}` | Person dokument | `registry.read` |
+| `registry://persons/{id}/licenses` | License[] danej osoby | `registry.read` |
+| `registry://persons/{id}/memberships` | OrganizationMember[] | `registry.read` |
+| `registry://organizations/{id}` | Organization dokument | `registry.read` |
+| `registry://organizations/{id}/members` | OrganizationMember[] | `registry.read` |
+| `registry://organizations/{id}/domains` | OrganizationDomain[] | `registry.read` |
+| `registry://organizations/{id}/children` | sub-organizácie (kluby pod zväzom) | `registry.read` |
+| `registry://licenses/{id}` | License dokument | `registry.read` |
+| `registry://codelists/{name}` | CodelistValue[] daného číselníka, lokalizované | `registry.read` |
+| `registry://codelists/{name}/{code}` | jedna CodelistValue | `registry.read` |
+
+Resources sú read-only. Pre modifikácie sú tools.
+
+### Tools
+
+#### Person operations
+
+```typescript
+register_person(input: {
+  firstName: string,
+  lastName: string,
+  birthDate: string, // ISO date
+  nationality: string, // ISO 3166-1 alpha-2
+  email?: string,
+  phone?: string,
+  identifierNational?: string, // šifrované cez CSFLE
+  language: 'sk' | 'cs' | 'en' | ...,
+  primaryRole: 'athlete' | 'professional' | 'fan' | 'supporter',
+}): Person
+// Scope: registry.write
+// ACL: admin tenanta
+// Errors: PERSON_DUPLICATE_EMAIL, PERSON_DUPLICATE_IDENTIFIER
+
+update_person(personId: string, patch: Partial<Person>): Person
+// Scope: registry.write
+// ACL: admin tenanta alebo samotná osoba (self-update niektorých polí)
+// Errors: PERSON_NOT_FOUND, PERSON_DUPLICATE_EMAIL
+
+deactivate_person(personId: string, reason: string): { success: boolean }
+// Scope: registry.write
+// ACL: admin tenanta
+// Effect: sets deletedAt, anonymizes some PII per GDPR
+
+lookup_person_by_identifier(input: {
+  identifierType: 'email' | 'national_id' | 'phone',
+  value: string,
+}): Person | null
+// Scope: registry.read (pre national_id vyžaduje registry.admin)
+// ACL: tenant scope
+// Use case: vyhľadávanie pri registrácii noveho člena
+```
+
+#### Organization operations
+
+```typescript
+create_organization(input: {
+  type: 'club' | 'federation' | 'commission' | 'educational' | 'sponsor',
+  legalName: string,
+  displayName: string,
+  ico?: string,
+  parentOrgId?: string,
+  defaultRetentionDays?: number,
+  minorSelfJoinAge?: number,
+}): Organization
+// Scope: registry.admin
+// ACL: system admin
+
+update_organization(orgId: string, patch: Partial<Organization>): Organization
+// Scope: registry.write
+// ACL: admin tej organizácie
+
+add_member(input: {
+  organizationId: string,
+  personId: string,
+  role: 'athlete' | 'coach' | 'referee' | ...,
+  startedAt?: string,
+}): OrganizationMember
+// Scope: registry.write
+// ACL: admin organizácie
+
+end_membership(memberId: string, endedAt: string, reason?: string): OrganizationMember
+// Scope: registry.write
+// ACL: admin organizácie
+
+add_organization_domain(input: {
+  organizationId: string,
+  hostname: string,
+  isPrimary: boolean,
+}): OrganizationDomain
+// Scope: registry.write
+// ACL: admin organizácie
+// Effect: vygeneruje verifyToken, vráti DNS instrukcie
+
+verify_organization_domain(domainId: string): OrganizationDomain
+// Scope: registry.write
+// ACL: admin organizácie
+// Effect: kontrola TXT recordu, ak passes → status='active', triggers TLS issuance
+```
+
+#### License operations
+
+```typescript
+issue_license(input: {
+  personId: string,
+  licenseType: string,
+  level: string,
+  issuingOrgId: string,
+  validUntil: string,
+  creditsRequired?: number,
+}): License
+// Scope: registry.write
+// ACL: admin issuingOrgId organizácie
+
+renew_license(licenseId: string, newValidUntil: string): License
+// Scope: registry.write
+// ACL: admin issuing org
+
+suspend_license(licenseId: string, reason: string): License
+// Scope: registry.write
+// ACL: admin issuing org
+
+revoke_license(licenseId: string, reason: string): License
+// Scope: registry.write
+// ACL: admin issuing org
+
+add_license_credits(licenseId: string, credits: number, source: string): License
+// Scope: registry.write
+// ACL: admin issuing org alebo ďalšie autorizované organizácie (vzdelávacie inštitúcie)
+```
+
+#### Codelist operations
+
+```typescript
+list_codelists(): Codelist[]
+// Scope: registry.read
+
+add_codelist_value(input: {
+  codelist: string,
+  code: string,
+  ordering: number,
+  translations: Record<Locale, { label: string, description?: string }>,
+  parentValueId?: string,
+}): CodelistValue
+// Scope: registry.admin (pre globálne) alebo registry.write s isCustomizable=true (pre org-custom)
+
+update_codelist_translation(input: {
+  codelistValueId: string,
+  language: string,
+  label: string,
+  description?: string,
+}): CodelistValue
+// Scope: registry.admin pre globálne, registry.write pre org-custom
+// Pre crowdsourced preklady: vyžaduje subsequent verify cez registry.admin
+```
+
+### Príklad volania (MCP klient v TypeScripte)
+
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse';
+
+const client = new Client({ name: 'activity.sportup.sk', version: '1.0.0' }, {
+  capabilities: { resources: {}, tools: {} },
+});
+
+await client.connect(new SSEClientTransport(
+  new URL('https://registry-mcp.activity.sportup.sk/mcp'),
+  { headers: { Authorization: `Bearer ${accessToken}` } }
+));
+
+// Read resource
+const person = await client.readResource({
+  uri: `registry://persons/${personId}`,
+});
+
+// Call tool
+const result = await client.callTool({
+  name: 'register_person',
+  arguments: {
+    firstName: 'Tomáš',
+    lastName: 'Vilček',
+    birthDate: '1995-03-12',
+    nationality: 'SK',
+    email: 'tomas@example.sk',
+    language: 'sk',
+    primaryRole: 'professional',
+  },
+});
+```
+
+## activity-mcp
+
+Aktivity, mentoring, komentáre. Beží na `activity-mcp.activity.sportup.sk`.
+
+### Resources
+
+| URI | Vracia | Scope |
+|---|---|---|
+| `activity://activities/{type}/{id}` | konkrétna aktivita daného typu | `activity.read` |
+| `activity://persons/{id}/activities` | timeline aktivít osoby | `activity.read` |
+| `activity://persons/{id}/mentorships` | mentoringové cykly osoby (mentor + mentee) | `activity.read` |
+| `activity://mentorships/{id}` | MentoringCycle detail | `activity.read` |
+| `activity://mentorships/{id}/sessions` | MentoringSession[] cyklu | `activity.read` |
+| `activity://sessions/{id}` | MentoringSession detail | `activity.read` |
+| `activity://sessions/{id}/private-note` | súkromná poznámka mentora — striktné ACL | `activity.read` (+ ACL gate) |
+| `activity://activities/{type}/{id}/comments` | ActivityComment[] pod aktivitou | `activity.read` |
+| `activity://organizations/{id}/audit-log` | audit log pre admin organizácie | `activity.moderate` |
+
+### Tools — všeobecné aktivity
+
+```typescript
+log_training(input: {
+  personId: string,
+  occurredAt: string,
+  durationMinutes: number,
+  trainingType: 'conditioning' | 'technical' | 'tactical' | 'recovery',
+  intensity?: number, // 1-10 RPE
+  location?: string,
+  notes?: string,
+}): Training
+// Scope: activity.write
+// ACL: vlastník (osoba) alebo tréner s aktívnou rolou
+
+log_match(input: {
+  personId: string,
+  matchId: string,
+  role: string, // "main_referee", "assistant", "player_starter", ...
+  result?: object, // sport-specific
+}): MatchParticipation
+// Scope: activity.write
+// ACL: vlastník alebo delegát zápasu
+
+log_medical_treatment(input: {
+  personId: string,
+  occurredAt: string,
+  diagnosis?: string,
+  treatment: string,
+  recordedByPersonId: string, // musí mať medical/physiotherapist license
+}): MedicalTreatment
+// Scope: activity.write
+// ACL: medical personnel s aktívnou licenciou
+// Audit: append-only log
+
+log_donation(input: {
+  donorPersonId?: string,
+  donorOrganizationId?: string,
+  recipientType: 'person' | 'organization' | 'event',
+  recipientId: string,
+  amount: number,
+  currency: string,
+  purpose?: string,
+}): Donation
+// Scope: activity.write
+// ACL: donor musí byť autentifikovaný
+```
+
+### Tools — mentoring
+
+```typescript
+create_mentoring_cycle(input: {
+  mentorPersonId: string,
+  menteePersonId: string,
+  sportId: string,
+  level: 'regional' | 'national' | 'uefa' | 'fifa',
+  startedAt?: string,
+}): MentoringCycle
+// Scope: activity.write
+// ACL: musí volať sám mentor (foundedByPersonId == mentorPersonId)
+// Validation: mentee má hotové základné vzdelávanie pre danú úroveň
+
+add_external_mentor(cycleId: string, externalPersonId: string): MentoringCycle
+// Scope: activity.write
+// ACL: mentor cyklu
+
+pause_mentoring_cycle(cycleId: string, reason: string): MentoringCycle
+// Scope: activity.write
+// ACL: mentor alebo mentee cyklu
+
+resume_mentoring_cycle(cycleId: string): MentoringCycle
+// Scope: activity.write
+// ACL: mentor cyklu
+
+complete_mentoring_cycle(input: {
+  cycleId: string,
+  finalEvaluation: string, // min 1 znak; bez tohto neprejde do completed
+}): MentoringCycle
+// Scope: activity.write
+// ACL: mentor cyklu (jediný)
+
+terminate_mentoring_cycle(cycleId: string, reason: string): MentoringCycle
+// Scope: activity.write
+// ACL: mentor alebo mentee cyklu
+
+propose_mentoring_session(input: {
+  cycleId: string,
+  occurredAt: string,
+  durationMinutes: number,
+  format: 'in_person' | 'online' | 'phone' | 'written' | 'hybrid',
+  location?: string,
+  onlinePlatform?: string,
+  topicProposal: string, // mentee popíše, čo chce riešiť
+}): MentoringSession
+// Scope: activity.write
+// ACL: mentor alebo mentee cyklu
+// Status: 'proposed'
+
+record_mentoring_session(input: {
+  sessionId?: string, // ak existuje proposed session, doplňame; ak nie, vytvoríme nový
+  cycleId: string,
+  occurredAt: string,
+  durationMinutes: number,
+  format: ...,
+  location?: string,
+  onlinePlatform?: string,
+  topics: string[], // 1-3 z mentoring_session_topic
+  matchReferenceId?: string,
+  summary: string, // min 50 znakov
+  outcome: string, // min 30 znakov
+  nextSteps?: string,
+  competencyTags?: string[],
+  attachments?: Attachment[],
+  externalLinks?: ExternalLink[],
+  linkedConvId?: string,
+  rangeStartMsgId?: string,
+  rangeEndMsgId?: string,
+}): MentoringSession
+// Scope: activity.write
+// ACL: mentor cyklu (jediný)
+// Status: 'recorded'
+// Effect: notifikácia mentee + audit log
+
+reject_mentoring_session(sessionId: string, reason: string): MentoringSession
+// Scope: activity.write
+// ACL: mentor cyklu
+// Status: 'proposed' → 'rejected'
+
+cancel_mentoring_session(sessionId: string, reason: string): MentoringSession
+// Scope: activity.write
+// ACL: mentor cyklu, do 24h od recordedAt
+// Status: 'recorded' → 'cancelled'
+
+update_mentoring_session(sessionId: string, patch: Partial<MentoringSession>): MentoringSession
+// Scope: activity.write
+// ACL: mentor cyklu, do 24h od recordedAt
+// Effect: editovaná značka, audit log, notifikácia mentee
+
+set_session_private_note(sessionId: string, body: string): void
+// Scope: activity.write
+// ACL: mentor cyklu (jediný môže zapisovať)
+
+get_session_private_note(sessionId: string): { body: string }
+// Scope: activity.read
+// ACL: mentor cyklu + admin organizácie (audit-only, log access)
+// Effect: každé čítanie audit log
+```
+
+### Tools — komentáre
+
+```typescript
+add_activity_comment(input: {
+  activityType: string,
+  activityId: string,
+  body: string,
+  parentCommentId?: string,
+}): ActivityComment
+// Scope: activity.write
+// ACL: per activityType, viď acl/matrix-comments.md
+
+edit_activity_comment(commentId: string, body: string): ActivityComment
+// Scope: activity.write
+// ACL: autor (vlastný komentár)
+
+delete_activity_comment(commentId: string, reason?: string): { success: boolean }
+// Scope: activity.write (vlastné) alebo activity.moderate (cudzie)
+// ACL: autor alebo moderátor
+
+list_activity_comments(input: {
+  activityType: string,
+  activityId: string,
+  cursor?: string,
+  limit?: number,
+}): { comments: ActivityComment[], nextCursor?: string }
+// Scope: activity.read
+// ACL: per activityType
+```
+
+### Špecialna validácia: notifikácie
+
+Po `record_mentoring_session` aj po `update_mentoring_session` aj po `cancel_mentoring_session` server publikuje internú udalosť, ktorá triggeruje notifikačný subsystém:
+
+```typescript
+// Internal event (publikované na Redis Pub/Sub)
+{
+  type: 'mentoring_session.recorded' | 'mentoring_session.updated' | 'mentoring_session.cancelled',
+  tenantId: string,
+  sessionId: string,
+  cycleId: string,
+  notifyPersonIds: [menteePersonId], // a prípadne externí mentori, predseda komisie
+  timestamp: string,
+}
+```
+
+Notifikačný subsystém potom doručí email + push notifikáciu (mobile, neskôr).
+
+## courier-mcp
+
+Chat a komunikácia. Beží na `courier-mcp.activity.sportup.sk`.
+
+### Resources
+
+| URI | Vracia | Scope |
+|---|---|---|
+| `courier://conversations/{id}` | Conversation metadata + zoznam účastníkov | `courier.read` |
+| `courier://conversations/{id}/messages` | Message[] (cursor-paginated, najnovšie najprv) | `courier.read` |
+| `courier://persons/{id}/conversations` | zoznam konverzácií, ktorých je osoba účastníkom | `courier.read` |
+| `courier://persons/{id}/inbox` | neprečítané správy naprieč konverzáciami | `courier.read` |
+
+### Tools — konverzácie
+
+```typescript
+create_conversation(input: {
+  kind: 'direct' | 'group' | 'broadcast',
+  participantIds: string[], // osoby; pre direct musí byť presne 2
+  proxyForMinors?: Array<{ parentPersonId: string, minorPersonId: string }>,
+  title?: string, // povinné pre group
+  owningOrgId: string,
+}): Conversation
+// Scope: courier.write
+// ACL: defaultné pravidlá (kto smie iniciovať, viď acl/matrix-courier.md)
+// Validation: pre direct sa overí, že obaja majú aktívny vzťah (mentor-mentee, tréner-zverenec, atď.)
+
+add_participant(input: {
+  conversationId: string,
+  personId: string,
+  representedMinorId?: string,
+  participantType: 'direct' | 'proxy_for_minor' | 'staff' | 'observer',
+  role: 'member' | 'admin' | 'publisher' | 'subscriber',
+}): ConversationParticipant
+// Scope: courier.write
+// ACL: admin konverzácie
+// Validation: pre proxy_for_minor sa overí ParentalAccess
+
+remove_participant(conversationId: string, participantId: string, reason?: string): void
+// Scope: courier.write
+// ACL: admin konverzácie alebo samotný účastník (leave)
+
+leave_conversation(conversationId: string): void
+// Scope: courier.write
+// ACL: účastník konverzácie
+
+archive_conversation(conversationId: string): Conversation
+// Scope: courier.admin
+// ACL: admin konverzácie
+
+mute_conversation(conversationId: string, dndActive: boolean): ConversationParticipant
+// Scope: courier.write
+// ACL: účastník
+// Validation: kind != 'direct' (DND nie pre 1:1)
+
+set_conversation_retention(conversationId: string, retentionDays: number): Conversation
+// Scope: courier.admin
+// ACL: admin organizácie konverzácie
+```
+
+### Tools — správy
+
+```typescript
+send_message(input: {
+  conversationId: string,
+  body: string, // ciphertext pre direct (E2E)
+  representedMinorId?: string, // ak posiela proxy rodič
+  replyToMessageId?: string,
+  attachments?: Attachment[],
+  externalLinks?: ExternalLink[],
+}): Message
+// Scope: courier.write
+// ACL: účastník s 'member' alebo 'publisher' rolou
+// Effect: publikuje na Redis Pub/Sub kanál pre real-time delivery
+
+edit_message(messageId: string, newBody: string): Message
+// Scope: courier.write
+// ACL: autor správy
+// Window: do napr. 24h od poslania (parametrizovateľné)
+
+delete_message(messageId: string): { success: boolean }
+// Scope: courier.write (vlastné) alebo courier.admin (cudzie ako moderátor)
+// ACL: autor alebo admin organizácie
+// Effect: soft-delete; pre direct E2E sa odstráni ciphertext (klienti majú lokálnu kópiu)
+
+mark_as_read(input: {
+  conversationId: string,
+  upToMessageId: string,
+}): void
+// Scope: courier.write
+// ACL: účastník
+
+react_to_message(input: {
+  messageId: string,
+  reaction: string, // emoji shortname, e.g. ":thumbsup:"
+}): void
+// Scope: courier.write
+// ACL: účastník
+```
+
+### Tools — moderation
+
+```typescript
+report_message(messageId: string, reason: string): { reportId: string }
+// Scope: courier.write
+// ACL: účastník
+// Effect: queue pre admin organizácie; nemodifikuje správu
+
+block_person(personId: string): void
+// Scope: courier.write
+// ACL: self (vždy povolené)
+// Effect: skryje správy danej osoby pre volajúceho
+
+unblock_person(personId: string): void
+// Scope: courier.write
+// ACL: self
+```
+
+### Tools — väzba na aktivity
+
+```typescript
+link_message_range_to_activity(input: {
+  conversationId: string,
+  startMessageId: string,
+  endMessageId: string,
+  activityType: string,
+  activityId: string,
+}): void
+// Scope: courier.write + activity.write
+// ACL: účastník konverzácie + autor aktivity
+// Effect: aktivita získa odkaz na rozsah správ, viditeľný v UI ako embed
+// Use case: "Vytvoriť mentoring sedenie z týchto správ"
+```
+
+### Real-time delivery cez SSE
+
+Klient sa pripojí na Server-Sent Events stream:
+
+```
+GET /sse/conversations/{conversationId}
+Authorization: Bearer ...
+Accept: text/event-stream
+```
+
+Server posiela udalosti:
+
+```
+event: message.created
+data: {"messageId": "...", "authorPersonId": "...", "createdAt": "..."}
+
+event: message.edited
+data: {"messageId": "...", "editedAt": "..."}
+
+event: message.deleted
+data: {"messageId": "..."}
+
+event: participant.added
+data: {"participantId": "...", "personId": "..."}
+
+event: typing.started
+data: {"personId": "..."}
+```
+
+Implementačne: SSE handler subscribuje na Redis Pub/Sub kanál `courier:conv:{conversationId}` a stream-uje udalosti klientovi.
+
+## Error handling
+
+### Štandardný error formát
+
+MCP errors používajú JSON-RPC error formát:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "error": {
+    "code": -32000,
+    "message": "Person not found",
+    "data": {
+      "errorCode": "PERSON_NOT_FOUND",
+      "personId": "abc123",
+      "traceId": "trace-xyz"
+    }
+  }
+}
+```
+
+Náš `errorCode` v `data.errorCode` je enum-ová hodnota, ktorú klient parsuje na lokalizovaný text.
+
+### Naše error codes (zoznam)
+
+| Code | Message (default EN) | HTTP equiv |
+|---|---|---|
+| `UNAUTHORIZED` | Authentication required | 401 |
+| `FORBIDDEN` | Insufficient permissions | 403 |
+| `TENANT_MISMATCH` | Resource belongs to different tenant | 403 |
+| `PERSON_NOT_FOUND` | Person does not exist | 404 |
+| `PERSON_DUPLICATE_EMAIL` | Email already registered | 409 |
+| `PERSON_DUPLICATE_IDENTIFIER` | National identifier already registered | 409 |
+| `ORGANIZATION_NOT_FOUND` | Organization does not exist | 404 |
+| `LICENSE_NOT_FOUND` | License does not exist | 404 |
+| `LICENSE_EXPIRED` | License is no longer active | 422 |
+| `MENTORING_CYCLE_NOT_FOUND` | Cycle does not exist | 404 |
+| `MENTORING_CYCLE_NOT_ACTIVE` | Cycle is not in active state | 422 |
+| `MENTORING_SESSION_NOT_FOUND` | Session does not exist | 404 |
+| `MENTORING_SESSION_EDIT_WINDOW_EXPIRED` | 24h edit window has expired | 422 |
+| `MENTORING_SESSION_REQUIRES_MENTOR` | Only mentor can record sessions | 403 |
+| `MENTORING_FINAL_EVALUATION_REQUIRED` | Cycle completion requires final evaluation | 422 |
+| `CONVERSATION_NOT_FOUND` | Conversation does not exist | 404 |
+| `CONVERSATION_DIRECT_ADD_PARTICIPANT_FORBIDDEN` | Cannot add participant to direct conversation; create new group | 422 |
+| `MESSAGE_NOT_FOUND` | Message does not exist | 404 |
+| `PARTICIPANT_NOT_FOUND` | Person is not a participant | 404 |
+| `PROXY_REQUIRES_PARENTAL_ACCESS` | Proxy participant requires valid parental access | 422 |
+| `RATE_LIMITED` | Too many requests | 429 |
+| `VALIDATION_ERROR` | Input validation failed | 400 |
+| `INTERNAL_ERROR` | Internal server error | 500 |
+
+Klient lokalizuje chyby cez i18n knižnicu na základe `errorCode`.
+
+## Pagination
+
+Všetky list endpointy podporujú **cursor-based pagination**:
+
+```typescript
+// Request
+{
+  limit: 50,           // max 100
+  cursor?: string,     // opaque, vrátený z predchádzajúceho volania
+}
+
+// Response
+{
+  items: [...],
+  nextCursor?: string, // null ak nie je ďalšia stránka
+}
+```
+
+Cursor je base64-encoded JSON s ostatnými query params + last seen `_id`. Klient ho len opakuje v ďalšom volaní.
+
+## Versioning
+
+MCP servery majú verziu v subdoméne (path-based, nie subdomain-based) keď bude potreba. Príklad:
+
+- `registry-mcp.activity.sportup.sk/mcp` (current, v1)
+- `registry-mcp.activity.sportup.sk/mcp/v2` (po breaking changes)
+
+Backward-incompatible zmeny dostanú nový endpoint, starý beží paralelne aspoň 12 mesiacov pred deprecation.
+
+## Health a observability
+
+Každý MCP server vystavuje:
+
+- `GET /health` — liveness probe (200 OK ak proces žije)
+- `GET /ready` — readiness probe (200 OK ak DB connection OK)
+- `GET /metrics` — Prometheus formát
+- `GET /version` — verzia + git commit hash
+
+## Implementačné poznámky
+
+### Stack
+
+```
+Fastify (HTTP server)
+  + @modelcontextprotocol/sdk (MCP server implementácia)
+  + Fastify SSE plugin (server-sent events)
+  + Fastify JWT plugin (auth)
+  + Native MongoDB driver
+  + Zod (validácia)
+  + Pino (structured logging)
+  + OpenTelemetry SDK
+```
+
+### Štruktúra projektu (per MCP server)
+
+```
+registry-mcp/
+├── src/
+│   ├── index.ts                  # bootstrap
+│   ├── server.ts                 # Fastify + MCP setup
+│   ├── auth/                     # JWT validation, scope check
+│   ├── tenancy/                  # tenant scoping middleware
+│   ├── resources/                # MCP resource handlers
+│   │   ├── persons.ts
+│   │   ├── organizations.ts
+│   │   └── ...
+│   ├── tools/                    # MCP tool handlers
+│   │   ├── personTools.ts
+│   │   ├── organizationTools.ts
+│   │   └── ...
+│   ├── services/                 # business logika, cross-collection invariants
+│   │   ├── PersonService.ts
+│   │   └── ...
+│   ├── repositories/             # MongoDB queries
+│   │   ├── PersonRepository.ts
+│   │   └── ...
+│   └── shared/                   # zdielané typy, errors, audit
+├── schemas/                      # Zod schémy (zdielané s frontendom cez monorepo)
+├── migrations/                   # MongoDB migrácie
+└── tests/
+```
+
+### Zdielané schémy (monorepo)
+
+Zod schémy sú v zdielanom packagi `@activity/schemas`, importované backendom (validácia vstupov) aj frontendom (formuláre). Príklad:
+
+```typescript
+// packages/schemas/src/person.ts
+import { z } from 'zod';
+export const PersonInputSchema = z.object({
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  // ...
+});
+export type PersonInput = z.infer<typeof PersonInputSchema>;
+```
+
+```typescript
+// services/registry-mcp uses it for tool input validation
+// apps/activity.sportup.sk uses it in React Hook Form
+```
+
+## Nasleduje
+
+Pre väzbu na ltksolutions/sportup.sk projekt pokračuj v [sportup-sk-integration](sportup-sk-integration).
+Pre detail mentoring subsystému pokračuj v [features/mentoring](features/mentoring).
+Pre detail Courier subsystému pokračuj v [features/courier](features/courier).
+Pre ACL matice pokračuj v [acl/](acl/).

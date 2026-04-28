@@ -1,0 +1,423 @@
+# Slovník pojmov
+
+Tento dokument vysvetľuje **kľúčové pojmy** používané v systéme. Slúži ako referencia pre nových členov tímu, dizajnérov, vývojárov a auditorov. Termíny sú zoradené abecedne.
+
+## A
+
+### ACL (Access Control List)
+
+Sada pravidiel, ktoré určujú, **kto smie čítať, písať, editovať alebo moderovať** aký záznam. V systéme sa ACL aplikuje v **autorizačnej vrstve** (medzi auth gate-om a business logikou). Pravidlá sú definované per typ entity (aktivita, konverzácia) a per rola.
+
+Operácie:
+- **R** — Read (čítať)
+- **W** — Write (písať)
+- **E** — Edit/delete vlastné
+- **A** — Admin (pridať/odobrať účastníkov)
+- **M** — Moderate (cudzie záznamy)
+- **S** — Start (iniciovať konverzáciu)
+
+Detaily v [acl/matrix-comments](acl/matrix-comments) a [acl/matrix-courier](acl/matrix-courier).
+
+### Activity
+
+Generický pojem pre **udalosti zaznamenávané v čase** v športovom kontexte. Polymorfný typ — má kostru (`tenantId`, `occurredAt`, `durationMinutes`, ...) a rozšírenie podľa typu (`training`, `match_participation`, `medical_treatment`, `mentoring_session`, ...).
+
+Aktivity žijú v collection `activity_main` v MongoDB Atlas.
+
+### activityType
+
+Pole na každej aktivite, ktoré určuje **konkrétny typ** (`'training'`, `'mentoring_session'`, `'medical_treatment'`, atď.). Používané pre polymorfné komentáre a pre routing v `ActivityRegistry`.
+
+### activity-mcp
+
+Jeden z troch MCP serverov v systéme. Spravuje **aktivity, mentoring, polymorfné komentáre**. Beží na `activity-mcp.activity.sportup.sk`. Detaily v [mcp-servers](mcp-servers).
+
+### Atlas Search
+
+MongoDB Atlas built-in **full-text search engine** založený na Apache Lucene. Používame ho pre vyhľadávanie v sedeniach, správach, komentároch. Detaily v [ops/atlas-search](ops/atlas-search).
+
+### Audit log
+
+Append-only collection (`auditLog`) v `activity_main` databáze, ktorá zaznamenáva **kritické udalosti** — prístup ku citlivým záznamom, moderation akcie, ACL zmeny. TTL 7 rokov.
+
+## B
+
+### Backward-compatible
+
+Vlastnosť schémovej zmeny, kde **starí klienti** stále fungujú s **novou verziou** (a naopak). Kritické pre rolling deployment bez downtime. Detaily v [ops/migrations](ops/migrations).
+
+### Broadcast
+
+Typ konverzácie v Courier subsystéme, kde **málo publisherov** posiela správy a **veľa subscriberov** ich číta. Príklad: klubový oznam pre fanúšikov, zväz → licencovaní rozhodcovia. ACL detaily v [acl/matrix-courier](acl/matrix-courier).
+
+## C
+
+### Caddy
+
+Webový server / reverse proxy s **automatickým TLS** cez Let's Encrypt. Používame ho ako **edge layer** pre on-demand TLS pri custom doménach organizácií. Detaily v [ops/deployment](ops/deployment).
+
+### CSFLE (Client-Side Field Level Encryption)
+
+MongoDB feature pre **šifrovanie konkrétnych polí** v dokumentoch. Šifrovanie sa robí na strane klienta (driver), DB nikdy nevidí plain text. Používame pre rodné číslo, kompletnú diagnózu. Master key v AWS KMS.
+
+### Codelist
+
+Číselník — **standardizovaný zoznam hodnôt** s prekladmi. Príklady: `mentoring_session_topic`, `referee_competencies`, `sport`, `region`. Niektoré sú master-ované v sportup.sk projekte (mirror), niektoré sú lokálne (napr. mentoring témy).
+
+### Collection
+
+V MongoDB ekvivalent **tabuľky** v relačnej DB. Obsahuje dokumenty (rovnocenné riadkom). Náš systém má desiatky collections naprieč troma databázami (`activity_registry`, `activity_main`, `activity_courier`).
+
+### Compound query
+
+V Atlas Search query s **viacerými podmienkami** (must, should, filter, mustNot). Umožňuje kombinovať full-text search s filtrami.
+
+### Conversation
+
+Chatová **konverzácia v Courier** subsystéme. Tri typy: `direct` (1:1), `group` (3+), `broadcast`. Detaily v [features/courier](features/courier).
+
+### ConversationParticipant
+
+Vzťahová entita medzi `Person` a `Conversation`. Obsahuje **rolu v konverzácii** (member, admin, publisher, subscriber, observer) a **typ účasti** (direct, proxy_for_minor, staff, observer). PK: `(conversationId, personId, representedMinorId)` pre support viacdetných rodín.
+
+### Courier
+
+Komunikačný subsystém systému — **chat 1:1 a skupinové konverzácie**. Beží ako samostatný MCP server (`courier-mcp`). Detaily v [features/courier](features/courier).
+
+### Cyklus
+
+Skratený názov pre `MentoringCycle`.
+
+## D
+
+### DEK (Data Encryption Key)
+
+V CSFLE — **šifrovací kľúč pre konkrétne pole**. DEK-y sú šifrované master kľúčom v AWS KMS.
+
+### Direct
+
+Typ konverzácie v Courier — **1:1 chat** medzi dvomi osobami. **End-to-end šifrovaný** — server vidí len ciphertext. Tretí účastník sa nedá pridať (treba vytvoriť novú group).
+
+### DND (Do Not Disturb)
+
+Funkcia v Courier, ktorá **stíši konverzáciu** (žiadne notifikácie, len badge v UI). Funguje len pre `group` a `broadcast` typy, **nie** pre `direct` (constraint).
+
+### Dokument
+
+V MongoDB — **jeden záznam** v collection (ekvivalent riadku). JSON-like štruktúra s ObjectId primárnym kľúčom (`_id`).
+
+## E
+
+### E2E (End-to-End encryption)
+
+Šifrovanie, kde **server nevie dešifrovať** obsah — len odosielateľ a príjemca majú kľúče. V systéme aplikované na `direct` konverzácie v Courier. Detaily v [features/courier](features/courier).
+
+### Externý mentor
+
+`Person` so `kind: 'external_lightweight'` — typicky bývalý reprezentant, UEFA / FIFA mentor. **Nemá** prihlásenie do aplikácie, žije len ako referencia v ACL maticiach. Pridáva sa do `MentoringCycle` cez `add_external_mentor`. Detaily v [features/mentoring](features/mentoring).
+
+## F
+
+### Fastify
+
+Node.js webový framework — používame ako **HTTP server** pre MCP servery a REST API. Rýchlejší než Express, modernejší API.
+
+### Fan club
+
+Špeciálny typ `Organization` s `type: 'fan_club'`. Je vlastníkom fanklubových konverzácií, broadcastov, hlasovaní.
+
+### FanInteraction
+
+Typ aktivity (`activityType: 'fan_interaction'`) — **fanúšikovská interakcia** ako hlasovanie, predikcia, attendance. Detaily v [workflows/fan](workflows/fan).
+
+### Forward-only
+
+Stratégia pre database migrácie — **žiadne `down` skripty**, len `up`. Pri probléme sa píše nová migrácia, nie revert. Detaily v [ops/migrations](ops/migrations).
+
+## G
+
+### GDPR
+
+General Data Protection Regulation — európske nariadenie o **ochrane osobných údajov**. Naše implementácie GDPR práv (export, delete, restrict) v [ops/retention-and-gdpr](ops/retention-and-gdpr).
+
+### Group
+
+Typ konverzácie v Courier — **3+ účastníkov**, všetci čítajú a píšu. Server-side šifrované. Voliteľne admin / moderátor.
+
+## I
+
+### Incident report
+
+Typ aktivity (`incident_report`) pre **záznamy o úrazoch a nehodách** počas tréningu / zápasu. Detaily v [workflows/medical](workflows/medical).
+
+### Inicializácia
+
+Pri prvom nasadení — **initial backfill** z sportup.sk projektu. Stiahnu sa všetky existujúce osoby a organizácie, vznikne `externalRefs.sportupSkId` mapping. Detaily v [sportup-sk-integration](sportup-sk-integration).
+
+### isLocal (na codelist)
+
+Flag, ktorý hovorí, že **číselník je lokálny** (nie z sportup.sk). Pri synchronizácii sa preskakuje.
+
+### isCustom (na codelistValue)
+
+Flag, ktorý hovorí, že **konkrétna hodnota je vlastná organizácie** (per-tenant rozšírenie štandardného číselníka).
+
+## J
+
+### JSON Schema
+
+Štandard pre **validáciu JSON dokumentov**. Používame ho v MongoDB JSON Schema validátoroch (na collection level, generované zo Zod schém).
+
+### JWT (JSON Web Token)
+
+Štandard pre **podpísané access tokeny**. Náš auth systém vystavuje JWT s claims: `sub` (Person ID), `tnt` (tenant ID), `scp` (scopes), `exp` (expiry).
+
+## K
+
+### Kontainer
+
+Pojem pre **entity, ktoré aktivity zoskupujú** alebo dlhodobo spravujú. Príklady: `Person` (kontainer pre všetky aktivity osoby), `MentoringCycle` (kontainer pre `MentoringSession` aktivity). Kontainer **nie je aktivita** — nemá `occurredAt`.
+
+## L
+
+### License
+
+Profesionálna licencia (rozhodca, tréner, lekár). Vystavuje ju oprávnená organizácia (zväz, akreditovaná inštitúcia). Má level (I, II, III, IV), kredity, validUntil. Detaily v [domain-model](domain-model).
+
+### Lucene
+
+Open-source **search library** od Apache Foundation. Atlas Search ho používa interne. Slovak analyzer (`lucene.slovak`) robí stemming pre slovenčinu.
+
+## M
+
+### `match_evaluation`
+
+Typ aktivity — **hodnotenie zo zápasu**, typicky delegát hodnotí rozhodcu. Štruktúra závisí od športu.
+
+### `match_participation`
+
+Typ aktivity — **účasť na zápase / preteku**. Kto, v akej role, výsledok. Eviduje sa pre hráčov, rozhodcov, trénerov.
+
+### MCP (Model Context Protocol)
+
+Otvorený štandard pre **komunikáciu medzi AI agentmi a backend systémami**. V našom systéme primárne API rozhranie. Tri MCP servery: registry-mcp, activity-mcp, courier-mcp. Detaily v [mcp-servers](mcp-servers).
+
+### Mecenáš
+
+Long-term podporovateľ, **fyzická osoba s pravidelnou podporou**. Detaily v [workflows/supporter](workflows/supporter).
+
+### `medical_treatment`
+
+Typ aktivity — **lekárske ošetrenie / vyšetrenie**. Najprísnejšia ACL. Detaily v [workflows/medical](workflows/medical).
+
+### Mention (`@user`)
+
+V komentároch — odkaz na konkrétnu osobu. Mentioned osoba dostane notifikáciu (s ACL gate-om). Detaily v [features/activity-comments](features/activity-comments).
+
+### Mentee
+
+Osoba, ktorá je v `MentoringCycle` ako **subjekt mentoringu** (mladý rozhodca, ktorý sa učí).
+
+### Mentor
+
+Osoba, ktorá v `MentoringCycle` **vedie a hodnotí** mentee. Vyplňuje formuláre `MentoringSession`.
+
+### MentoringCycle
+
+**Kontainer** pre dlhodobý vzťah mentor ↔ mentee. Žije v `activity_main` databáze, ale **nie je aktivita** (nemá `occurredAt`). Cyklov môže byť pre jedného mentee viacero — sekvenčne aj paralelne.
+
+### MentoringSession
+
+Typ aktivity (`activityType: 'mentoring_session'`) — **jeden vyplnený formulár o mentoringu**. Vypĺňa ho vždy mentor. Detaily v [features/mentoring](features/mentoring).
+
+### Mirror
+
+Stratégia, kde **lokálne držíme kópiu dát** z externého systému. Identitné polia mirror = master sportup.sk; aplikačné polia lokálne.
+
+## N
+
+### Nextra
+
+**Statický generátor dokumentácie** založený na Next.js. Používame pre `docs.activity.sportup.sk`. Markdown source, pekné UI, search ready (zatiaľ vypnuté pre MVP).
+
+## O
+
+### ObjectId
+
+V MongoDB — **12-byte unikátny identifikátor**. Default primárny kľúč pre dokumenty. Hexadekadálna reprezentácia (24 znakov).
+
+### OIDC (OpenID Connect)
+
+Authentifikačný protokol nad OAuth 2.1. Používame `auth.activity.sportup.sk` ako OIDC provider.
+
+### OrganizationDomain
+
+Zaznamenáva, že **organizácia má vlastnú doménu** (napr. `clenovia.sfz.sk`). Workflow: pridať doménu → DNS verify → on-demand TLS issue. Detaily v [architecture](architecture).
+
+### OrganizationMember
+
+Vzťahová entita medzi `Person` a `Organization`. **Rola osoby v organizácii** (athlete, coach, referee, parent, fan_club_member, ...). Môže mať `endedAt` pre ukončenie členstva.
+
+### Override
+
+V kontexte retencie — **per-conversation predĺženie** retenčnej doby cez `Conversation.retentionDays`. Default je org-level `Organization.defaultRetentionDays`.
+
+## P
+
+### ParentalAccess
+
+M:N vzťahová entita medzi rodičom a maloletým dieťaťom. Má `validUntil` (= birthDate + 18). Pri `restricted: true` rodič stráca prístup. Detaily v [features/parental-proxy](features/parental-proxy).
+
+### Person
+
+Fyzická osoba v systéme. Atomárny záznam identity. Môže mať viacero rolí (athlete aj coach súčasne) cez `OrganizationMember`. Žije v `activity_registry`. Detaily v [domain-model](domain-model).
+
+### Pino
+
+Node.js **structured logging** library. Default loger v našich servisoch. JSON output, fast.
+
+### Polymorfný komentár
+
+Komentár, ktorý sa môže prilepiť **na akúkoľvek aktivitu** cez `(activityType, activityId)` referenciu. Detaily v [features/activity-comments](features/activity-comments).
+
+### Proxy účastníctvo
+
+V Courier — **rodič vystupuje ako zástupca dieťaťa**. `participantType: 'proxy_for_minor'`, `representedMinorId` field. Detaily v [features/parental-proxy](features/parental-proxy).
+
+## R
+
+### Redis
+
+In-memory **key-value store**. V systéme používame na: pub/sub (Courier real-time), cache, rate limiting counters.
+
+### Retention
+
+**Doba uchovávania** dát. Per-collection rôzna (lekárske 20 rokov, marketing 2 roky, audit 7 rokov). Per-conversation override pre Courier. Detaily v [ops/retention-and-gdpr](ops/retention-and-gdpr).
+
+### `restricted` (na ParentalAccess)
+
+Flag pre **súdne obmedzený rodičovský prístup**. Pri `true` rodič stráca proxy a read access. Nastavuje len admin organizácie na základe súdneho rozhodnutia.
+
+## S
+
+### Scope
+
+V OAuth/OIDC — **granulárna autorizačná hodnota**. Príklady: `registry.read`, `activity.write`, `courier.admin`. Detaily v [mcp-servers](mcp-servers).
+
+### Schema version
+
+Pole `schemaVersion` na každom dokumente. Pri lazy migration repository kontroluje a upgradne pri prvom čítaní starého dokumentu.
+
+### SCFLE
+
+Skratka nepoužívame, viď CSFLE.
+
+### Soft delete
+
+Mazanie cez **`deletedAt: <timestamp>`** namiesto fyzického DELETE. Záznam zostáva, je len skrytý. Pri hardcore retencii sa neskôr fyzicky zmaže.
+
+### registry-mcp
+
+Jeden z troch MCP serverov. Spravuje **registre osôb, organizácií, licencií, číselníkov**. Beží na `registry-mcp.activity.sportup.sk`.
+
+### sportup.sk projekt (ltksolutions)
+
+Existujúci open-source projekt na [github.com/ltksolutions/sportup.sk](https://github.com/ltksolutions/sportup.sk). Náš systém je **klient** tohto projektu — mirror-uje identitné dáta. Detaily v [sportup-sk-integration](sportup-sk-integration).
+
+### SSE (Server-Sent Events)
+
+HTTP-based protokol pre **server → klient streaming**. Používame v Courier pre real-time delivery správ. Klient sa pripojí GET requestom s `Accept: text/event-stream`, server posiela udalosti. Detaily v [features/courier](features/courier).
+
+### Stem / stemming
+
+V search-i — **redukcia slova na jeho základ** (napr. *trénovanie*, *tréning*, *trénoval* → root *trén-*). Slovak analyzer to robí.
+
+### Subdoména
+
+V multi-tenancy systéme — **`tenant.activity.sportup.sk`** vzor. Každá organizácia môže mať vlastnú subdoménu (default) alebo custom doménu (cez `OrganizationDomain`).
+
+### Synonymá
+
+V Atlas Search — **mapping ekvivalentných výrazov**. Napríklad *ofsajd* ↔ *postavenie mimo hry*. Detaily v [ops/atlas-search](ops/atlas-search).
+
+## T
+
+### Tenant
+
+Synonymum pre **organizáciu** v multi-tenant zmysle. `tenantId` field na každom dokumente, izoluje dáta organizácie. Tenant scoping vynútený v repository layer-i.
+
+### Timeline
+
+UI vzor — **chronologický zoznam aktivít** osoby alebo entity. Najnovšie najprv. Použité v profile, dashboarde.
+
+### TLS (Transport Layer Security)
+
+Šifrovanie HTTP komunikácie (HTTPS). Pre custom domény používame **Caddy on-demand TLS** (Let's Encrypt).
+
+### TUE (Therapeutic Use Exemption)
+
+Antidopingová **výnimka** pre lekársky predpísaný liek so zakázanou substanciou. Eviduje sa ako `antidoping_record` aktivita.
+
+## V
+
+### Vyprchávanie prístupu
+
+Vzor, kde **rola po skončení aktívneho stavu stráca práva**. Príklady: mentor po `completed` cyklu stráca W/E (R zostáva pre audit), tréner po odchode z klubu stráca prístup k tímovým záznamom.
+
+## W
+
+### Webhook
+
+HTTP callback od externého systému. V našom kontexte sportup.sk webhooky upozorňujú na zmeny osôb a organizácií. Detaily v [sportup-sk-integration](sportup-sk-integration).
+
+## Z
+
+### Zod
+
+TypeScript-first **schema validation library**. Používame pre definíciu schém domain modelov. Zo Zod schém generujeme JSON Schema validátory pre MongoDB. Príklad:
+
+```typescript
+const PersonSchema = z.object({
+  firstName: z.string().min(1),
+  birthDate: z.date(),
+  // ...
+});
+```
+
+## Skratky
+
+| Skratka | Význam |
+|---|---|
+| ACL | Access Control List |
+| API | Application Programming Interface |
+| AWS KMS | Amazon Web Services Key Management Service |
+| CSFLE | Client-Side Field Level Encryption |
+| CDN | Content Delivery Network |
+| DAU | Daily Active Users |
+| DEK | Data Encryption Key |
+| DND | Do Not Disturb |
+| E2E | End-to-End (encryption) |
+| GDPR | General Data Protection Regulation |
+| HMAC | Hash-based Message Authentication Code |
+| ISO | International Organization for Standardization |
+| JSON | JavaScript Object Notation |
+| JWT | JSON Web Token |
+| MAU | Monthly Active Users |
+| MCP | Model Context Protocol |
+| OIDC | OpenID Connect |
+| ORM | Object-Relational Mapping |
+| RPE | Rating of Perceived Exertion |
+| SLO | Service Level Objective |
+| SSE | Server-Sent Events |
+| TLS | Transport Layer Security |
+| TTL | Time To Live |
+| TUE | Therapeutic Use Exemption |
+| URL / URI | Uniform Resource Locator / Identifier |
+| UUID | Universally Unique Identifier |
+| WADA | World Anti-Doping Agency |
+| WCAG | Web Content Accessibility Guidelines |
+
+## Nasleduje
+
+Pre prehľad systému pokračuj v [overview](overview).
+Pre technické detaily pokračuj v [architecture](architecture), [domain-model](domain-model), [mcp-servers](mcp-servers).

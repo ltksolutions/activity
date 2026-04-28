@@ -1,0 +1,369 @@
+# Workflow — Lekár, Fyzioterapeut, Mentálny kouč
+
+Tento dokument popisuje životný cyklus zdravotníckych odborníkov v systéme — lekárov, fyzioterapeutov, mentálnych koučov a výživových poradcov. Spoločným menovateľom je **práca s citlivými dátami** o zdraví a psychickom stave športovcov, čo prináša najprísnejšie ACL pravidlá.
+
+## Životný cyklus
+
+```
+Akreditácia (oprávnenie pracovať v zdravotníctve / športe)
+    │
+    ▼
+Členstvo v klube alebo zväze (OrganizationMember)
+    │
+    ├──► Vstupné prehliadky športovcov
+    │
+    ├──► Bežné ošetrenia, fyzio sedenia
+    │
+    ├──► Akútne zásahy pri zápasoch
+    │
+    ├──► Rehabilitácia po zraneniach
+    │
+    └──► Antidopingová podpora (TUE žiadosti)
+
+       Špecificky pre psychológov / mentálnych koučov:
+       └── Sedenia, dlhodobá podpora športovca
+
+       Špecificky pre výživových poradcov:
+       └── Jedálničky, suplementácia, monitoring váhy
+```
+
+## Roly a špecializácie
+
+### Lekár (`role: 'medical_doctor'`)
+
+- Vstupné športové prehliadky
+- Akútne ošetrenia
+- Predpisovanie liečby
+- Vystavovanie potvrdení o zdravotnej spôsobilosti
+- Antidopingová podpora (TUE — Therapeutic Use Exemption)
+- Tímový lekár pri zápasoch a sústredeniach
+
+### Fyzioterapeut (`role: 'physiotherapist'`)
+
+- Rehabilitačné cvičenia
+- Manuálna terapia
+- Prevencia zranení
+- Spolupráca s trénerom na záťažovom plánovaní
+- Asistencia pri akútnych zraneniach
+
+### Mentálny kouč / sport psychologist (`role: 'mental_coach'`)
+
+- Sedenia s športovcami
+- Príprava na vrcholové podujatia
+- Krízové intervencie
+- Tímová psychológia (tímová dynamika, konflikty)
+
+### Výživový poradca (`role: 'nutritionist'`)
+
+- Individuálne jedálničky
+- Suplementácia (s ohľadom na antidoping)
+- Monitoring váhy a kompozície tela
+- Edukácia tímu
+
+### Kondičný tréner (často spolu s fyzio, ale samostatná rola — `role: 'fitness_coach'`)
+
+- Fyzická príprava (silová, kondičná)
+- Testovanie výkonnosti
+- Spolupráca s trénerom
+
+## Licencia a akreditácia
+
+Pre lekárov a fyzio je potrebná **profesijná licencia** vydaná SLK / SKFT (slovenská lekárska a fyzioterapeutická komora) alebo ekvivalentná zo zahraničia.
+
+V systéme:
+
+```
+License {
+  personId,
+  licenseType: 'medical_doctor' | 'physiotherapist' | 'mental_coach' | 'nutritionist',
+  level: 'specialist' | 'sport_medicine' | 'general',
+  issuingOrgId,  // SLK, SKFT, alebo ekvivalent
+  validUntil,
+  status: 'active',
+}
+```
+
+Pre **mentálnych koučov a výživových poradcov** licencia v slovenskom kontexte nie je striktne povinná, ale klub/zväz môže vyžadovať certifikát o vzdelaní (psychológia, dietetika).
+
+## Hlavné aktivity
+
+### `medical_treatment` — Ošetrenie / vyšetrenie
+
+Najfrekventovanejšia aktivita zdravotníckeho personálu:
+
+```
+MedicalTreatment {
+  personId: <athlete>,
+  treatmentType: 'examination' | 'treatment' | 'rehabilitation' | 'preventive' | 'emergency',
+  occurredAt, durationMinutes,
+  diagnosis: <text, šifrované>,
+  treatment: <text>,
+  prescriptions: [...],  // ak relevantné
+  followUpRequired: boolean,
+  followUpDate: ISODate | null,
+  recordedByPersonId: <medical professional>,
+  recordedByLicenseId: <reference na License>,
+}
+```
+
+#### Špeciálne polia pre fyzio
+
+```
+fizioSession: {
+  treatmentTechniques: [...],
+  exercisePrescription: [...],
+  homeExercises: [...],
+}
+```
+
+#### Špeciálne polia pre mentálneho kouča
+
+```
+mentalSession: {
+  topicCategory: 'pre_competition' | 'crisis' | 'team_dynamics' | 'general_development',
+  approachUsed: <text>,
+  // notes sú STRIKTNE súkromné — separátna entita ako pri mentoring private notes
+}
+```
+
+#### Súkromné poznámky mentálneho kouča
+
+Podobne ako mentor cyklu, mentálny kouč má často poznámky, ktoré **neukazuje subjektu** — napr. preliminárne hypotézy o psychickom stave. Tieto idú do separátnej entity:
+
+```
+MentalSessionPrivateNote {
+  sessionId,
+  authorPersonId: <kouč>,
+  body: <text>,
+  // ACL: len autor + admin organizácie audit-only
+}
+```
+
+### `medical_examination` — Vstupná športová prehliadka
+
+Špeciálny prípad `medical_treatment` s `treatmentType: 'examination'` a podpoľami:
+
+```
+{
+  examinationType: 'entry' | 'periodic' | 'return_to_play' | 'pre_competition',
+  fitForSport: boolean,
+  fitnessLimitations: <text>,
+  validUntil: ISODate,  // potvrdenie platí do
+  findings: { ... },     // sport-specific findings
+}
+```
+
+Po vystavení potvrdenia o zdravotnej spôsobilosti sa v profile športovca aktualizuje `Person.medicalClearanceUntil` (ak má systém takéto pole — TBD).
+
+### `incident_report` — Záznam o úraze pri zápase / tréningu
+
+Pre akútne zásahy:
+
+```
+IncidentReport {
+  occurredAt,
+  athletePersonId,
+  description,
+  severity: 'minor' | 'moderate' | 'severe' | 'life_threatening',
+  initialActions: [...],
+  outcome: 'continued' | 'substituted' | 'hospital' | 'mortality',
+  recordedByPersonId: <medical professional alebo trener>,
+}
+```
+
+Z incidentu môže nasledovať `MedicalTreatment` aktivity počas rehabilitácie.
+
+### `mental_session` — Sedenie s mentálnym koučom
+
+Štruktúrované ako `medical_treatment` ale s vlastnými poliami špecifickými pre psychologickú prácu.
+
+### `nutrition_consultation` — Konzultácia s výživovým poradcom
+
+```
+NutritionConsultation {
+  athletePersonId,
+  occurredAt,
+  weighIn: { weight, bodyFatPct, muscleMass, ... },
+  dietPlanId: <ref na DietPlan dokument>,  // ak vznikne plán
+  recommendations: <text>,
+  supplementsApproved: [...],  // antidoping-friendly
+}
+```
+
+### `education_event` — Vzdelávanie
+
+Pre udržanie a postup licencie. Lekári musia mať pravidelné kontinuálne vzdelávanie (cez SLK).
+
+## Práca v tíme
+
+### Realizačný tím okolo športovca
+
+Pri profesionálnych športovcoch je realizačný tím (tréner + fyzio + lekár + mentálny kouč + výživár) v `group` Courier konverzácii.
+
+Účel:
+
+- Zdielanie zdravotných obmedzení
+- Koordinácia tréningu a regenerácie
+- Diskusia pred dôležitými zápasmi
+
+ACL: skupina je viditeľná všetkým členom realizačného tímu, **nie samotnému športovcovi** (rozhodnutie za rozhodnutie záleží od klubu).
+
+### Inter-disciplinárna spolupráca
+
+Príklad: športovec sa zranil:
+
+1. Klubový lekár vyhotoví `MedicalTreatment` so zranením
+2. Notifikáciu dostane fyzio a tréner
+3. Fyzio v komentároch pod treatment-om naznačí rehabilitačný plán
+4. Tréner upraví záťažový plán
+5. Mentálny kouč môže mať rolu pri psychickej príprave návratu
+
+Toto všetko sa deje v rámci jednej aktivity (`MedicalTreatment`) cez komentárový systém.
+
+## Špecifické workflowy
+
+### Vstupná športová prehliadka
+
+Pre nového člena klubu:
+
+1. Klub priradí športovca k lekárovi
+2. Lekár vykoná prehliadku (`medical_examination` aktivita)
+3. Vystaví potvrdenie o spôsobilosti (uloží `validUntil`)
+4. Notifikácia klubovému manažérovi a športovcovi
+
+### Akútne zranenie počas zápasu
+
+1. Tímový lekár alebo fyzio zachytí cez `incident_report`
+2. Po stabilizácii vyhotoví `medical_treatment` so zraneniem
+3. Pri vážnom zranení nasleduje hospitalizácia (mimo systému) — neskôr sa doplní `medical_treatment` s diagnózou z nemocnice
+4. Rehabilitačný plán cez následné `medical_treatment` aktivity (`treatmentType: 'rehabilitation'`)
+5. Pred návratom: `medical_examination` s `examinationType: 'return_to_play'`
+
+### TUE — Therapeutic Use Exemption
+
+Profesionálny športovec potrebuje liek so zakázanou substanciou (napr. inzulín pre diabetika, kortikosteroidy):
+
+1. Lekár pripraví TUE žiadosť
+2. Žiadosť ide cez antidoping autoritu (mimo systému)
+3. Po schválení sa eviduje ako `antidoping_record` aktivita s `recordType: 'tue_application'`
+4. Klubový lekár, antidoping officer a samotný športovec to vidia
+
+## Najprísnejšia ACL
+
+Detailne v [../acl/matrix-comments](/acl/matrix-comments), zhrnutie:
+
+| Záznam | Vidí športovec | Vidí lekár-autor | Vidí klubový lekár | Vidí tréner | Vidí rodič maloletého | Vidí admin |
+|---|---|---|---|---|---|---|
+| `medical_treatment` | ✓ | ✓ | ✓ | – | ✓ (full) | ✓ (audit) |
+| `mental_session` | ✓ | ✓ | – | – | ✓ (full) | ✓ (audit) |
+| `mental_session_private_note` | – | ✓ | – | – | – | ✓ (audit) |
+| `incident_report` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `antidoping_record` | ✓ | ✓ | ✓ | – | ✓ | – |
+
+Tréner explicitne **nemá** prístup k zdravotným záznamom — to je pre nás dôležitý design choice. Pri ne­zhode (tréner žiada info) idú údaje cez sekretované kanály a ACL prevent unauthorized access.
+
+## Audit log
+
+Každý prístup ku zdravotnému záznamu sa loguje:
+
+```
+AuditLog {
+  accessedByPersonId,
+  targetType: 'medical_treatment',
+  targetId,
+  action: 'read' | 'update',
+  reason: <text>,  // ak admin organizácie - povinné
+  accessedAt,
+  ipAddress,
+  userAgent,
+}
+```
+
+Pri prístupe rodiča maloletého:
+
+```
+{
+  accessedByPersonId: <parent>,
+  targetType: 'medical_treatment',
+  targetId: <treatment of minor>,
+  action: 'read',
+  // automaticky logovane, žiadny reason povinný
+}
+```
+
+Pri prístupe admin organizácie sa **vyžaduje uvedenie dôvodu**.
+
+## Komunikácia
+
+### S pacientom (športovcom)
+
+`direct` konverzácia lekár ↔ športovec:
+
+- E2E šifrovaná
+- Pre maloletých cez rodiča-proxy alebo s rodičom v read-only
+
+### V realizačnom tíme
+
+`group` konverzácia s ostatnými odborníkmi (tréner, fyzio, mentálny kouč):
+
+- Žiadne **citlivé detaily** — len koordinačná komunikácia
+- Špecifické zdravotné info ide len cez `MedicalTreatment` s ACL gate
+
+### S rodičom maloletého
+
+`direct` konverzácia lekár ↔ rodič:
+
+- E2E šifrovaná
+- Diskusia o zdravotnom stave dieťaťa
+- Plánovanie ošetrení
+
+## Reporty a štatistiky
+
+### Pre lekára
+
+- Plánované prehliadky (queue)
+- Aktuálne zranenia v starostlivosti
+- Pripadne TUE žiadosti
+- Vlastná licencia status
+
+### Pre klub
+
+- Zranenia v tíme (count, severity)
+- Trendy zranení podľa polohy / typu
+- Validity zdravotných potvrdení (warning pri blízkej expirácii)
+- Náklady na zdravotnú starostlivosť (mimo MVP)
+
+### Pre zväz / regulátor
+
+- Spôsobilosť športovcov v reprezentácii
+- Antidopingové štatistiky (anonymizované)
+
+## Notifikácie
+
+| Udalosť | Notifikácia |
+|---|---|
+| Pridelenie nového pacienta | email |
+| Plánovaná prehliadka | email + push |
+| Akútne zranenie pri zápase | push (high priority) |
+| Pripomienka follow-up | email + push |
+| Stav licencie (expiry warning) | email |
+| Pre rodiča: nový lekársky záznam dieťaťa | email + push |
+| Pre športovca: nový lekársky záznam | email |
+
+## Otvorené otázky
+
+1. **Integrácia s nemocničnými systémami** — keď športovec ide do nemocnice, ako sa preneśu informácie? Pre MVP manuálne, klubový lekár rekonstruuje záznam.
+
+2. **AI-asistovaná diagnostika** — pre future. Vyžaduje doménový tréning + opt-in od subjektu.
+
+3. **Telemedicína** — video konzultácie cez Courier. Out-of-scope pre MVP, ale schéma to umožňuje (externé linky na Zoom/Meet).
+
+4. **Cross-border medical records** — slovenský športovec v zahraničí. Lekárske záznamy v rôznych krajinách. Vyžaduje cross-tenant flow s privacy ohľadom na rôzne zákonodarstvá.
+
+5. **Drug interaction warnings** — pri predpisovaní v rámci athleta. Vyžaduje databázu liekov.
+
+## Nasleduje
+
+Pre tréner pokračuj v [coach](coach).
+Pre rozhodca pokračuj v [referee](referee).
+Pre fanúšika pokračuj v [fan](fan).

@@ -1,0 +1,384 @@
+# Database Migrations
+
+Tento dokument popisuje **stratégiu databázových migrácií** v MongoDB. Vzhľadom na to, že nepoužívame ORM (native MongoDB driver + Zod), všetka schémová evolúcia ide cez **explicitné migration skripty**.
+
+## Princípy
+
+### 1. Forward-only
+
+Migrácie sú **jednosmerné**. Žiadne `down` skripty. Pri probléme sa píše nová migrácia, ktorá fixne nesprávny stav.
+
+Dôvod: pri zložitejších schémových zmenách (napr. split jednej collection na dve) je rollback často **nemožný** bez data loss-u. Forward-only nás núti uvažovať dopredu.
+
+### 2. Backward-compatible
+
+Schémové zmeny musia byť kompatibilné s **predchádzajúcou + 2 verziami** aplikácie:
+
+- **Verzia N+1** musí dokázať čítať dáta zapísané verziou N
+- **Verzia N** musí dokázať čítať dáta zapísané verziou N+1 (s ignorovaním nových polí)
+
+Toto umožňuje **rolling deployment** bez downtime — počas update-u časť pod-ov beží na N, časť na N+1.
+
+### 3. Idempotentné
+
+Migrácia aplikovaná viackrát musí dať rovnaký výsledok ako raz. To je dôležité pri zlyhaniach a re-tries.
+
+### 4. Atomické per dokument
+
+Migrácie modifikujú **jeden dokument naraz** v transakcii. Žiadne globálne `ALTER` operácie cez tisíce dokumentov v jednej transakcii — MongoDB má na to limity (16MB transakcia, 60s timeout).
+
+Pre veľké migrácie sa používa **batched approach** — po 1000 dokumentoch commit, pokračovať.
+
+## Štruktúra
+
+### Per service
+
+Každý MCP server má vlastnú migrácie zložku:
+
+```
+registry-mcp/
+├── migrations/
+│   ├── 001-initial-schema.ts
+│   ├── 002-add-license-credits.ts
+│   ├── 003-codelist-translations.ts
+│   ├── 004-org-domain-verification.ts
+│   └── ...
+├── migrations.applied  (collection v DB s applied versions)
+```
+
+```
+activity-mcp/
+├── migrations/
+│   └── ...
+```
+
+```
+courier-mcp/
+├── migrations/
+│   └── ...
+```
+
+Každý service má vlastnú DB, vlastný versioning. Cross-service zmeny vyžadujú koordinovaný release.
+
+### Skript template
+
+```typescript
+// migrations/005-add-organization-default-retention.ts
+import { Db } from 'mongodb';
+
+export const version = 5;
+export const description = 'Add defaultRetentionDays field to Organization';
+
+export async function up(db: Db): Promise<void> {
+  // Idempotent — checkne, či pole už existuje
+  await db.collection('organization').updateMany(
+    { defaultRetentionDays: { $exists: false } },
+    { $set: { defaultRetentionDays: 365 } }
+  );
+
+  // Pridaj index, ak treba
+  await db.collection('organization').createIndex(
+    { defaultRetentionDays: 1 },
+    { background: true }
+  );
+}
+
+// Žiadny `down`. Forward-only.
+```
+
+### Schema versioning per dokument
+
+Každý dokument má pole `schemaVersion`:
+
+```typescript
+{
+  _id: ObjectId,
+  schemaVersion: 3,
+  // ...
+}
+```
+
+Čítacia vrstva (`Repository`) kontroluje:
+
+```typescript
+async function findById(id: ObjectId): Promise<Person> {
+  const doc = await this.collection.findOne({ _id: id });
+  if (!doc) return null;
+
+  // Lazy migration ak je doc starší
+  if (doc.schemaVersion < CURRENT_SCHEMA_VERSION) {
+    return await this.migrateLazyToCurrent(doc);
+  }
+
+  return PersonSchema.parse(doc);
+}
+```
+
+Toto je *lazy migration* — dokument sa upgrade-uje pri prvom čítaní. Doplnková stratégia k *eager migration* (background job, ktorý prejde všetky a updatne).
+
+## Workflow
+
+### Pri pridaní novej migrácie
+
+1. **Vytvoriť migration skript** v `migrations/` s ďalším poradovým číslom
+2. **Otestovať lokálne** — `npm run migrate:up` aplikuje migrácie
+3. **Test backward compat** — staré aplikačné verzie musia stále fungovať
+4. **Code review** — kontrola idempotency a backward compat
+5. **Merge** do `main`
+6. **Staging deploy** — automaticky aplikuje migrácie
+7. **Production deploy** — manuálny gate, aplikuje migrácie pred startom novej app verzie
+
+### Sequence pri produkčnom deployi
+
+```
+1. CI prejde, image-y sú v registry
+2. Operator triggeruje deploy
+3. Pre-deploy migration job:
+   - Connect to production DB
+   - Compare currentVersion vs targetVersion
+   - Apply pending migrations sequentially
+   - Update migrations.applied collection
+4. Health check
+5. Rolling update services
+   - 1 pod per service na novú verziu
+   - Wait for healthy
+   - Continue
+6. Smoke tests
+7. Done, alebo rollback (bez DB rollback — len code revert)
+```
+
+### Migrácie počas deploy-u
+
+Pre **non-breaking** zmeny (pridávanie polí, indexy) je migration job rýchly (sekundy).
+
+Pre **breaking** zmeny (refactoring schémy) môže trvať dlhšie:
+
+- Pridanie nového poľa: rýchle
+- Zmena typu poľa (string → enum): potreba data transform — pomalšie
+- Split collection: dlhý batched job, môžeme to robiť **online** (počas chodu apky)
+
+Online migrácie majú dva fázové príkazy:
+
+**Fáza A (deploy):**
+- Apka číta nové aj staré schémy
+- Apka zapisuje len novú schému
+- Migration job v pozadí konvertuje staré dokumenty
+
+**Fáza B (cleanup):**
+- Po dokončení batched migrácie, deploy nového release-u, ktorý už staré schémy nečíta
+- Drop legacy fields / indexy
+
+## Veľké migrácie
+
+Pri migrácii cez milióny dokumentov:
+
+### Batched approach
+
+```typescript
+const BATCH_SIZE = 1000;
+
+let lastId: ObjectId | null = null;
+
+while (true) {
+  const filter = {
+    schemaVersion: { $lt: TARGET_VERSION },
+    ...(lastId && { _id: { $gt: lastId } }),
+  };
+
+  const docs = await collection
+    .find(filter)
+    .sort({ _id: 1 })
+    .limit(BATCH_SIZE)
+    .toArray();
+
+  if (docs.length === 0) break;
+
+  for (const doc of docs) {
+    await migrateDocument(doc);
+  }
+
+  lastId = docs[docs.length - 1]._id;
+
+  // Throttling, aby sme neuhľadali Atlas
+  await sleep(100);
+}
+```
+
+### Resumable
+
+Každý batch update-uje **resumeToken** v `migrations.progress` collection:
+
+```typescript
+{
+  migrationName: '005-add-defaults',
+  lastProcessedId: ObjectId('...'),
+  totalProcessed: 14523,
+  totalEstimated: 50000,
+  status: 'running' | 'completed' | 'failed',
+  startedAt, lastUpdatedAt,
+}
+```
+
+Pri zlyhaní (network, OOM) sa migrácia spustí znova a pokračuje od `lastProcessedId`.
+
+### Online migrácie s flag
+
+Pre veľmi veľké migrácie (mesačná batch operácia):
+
+1. Deploy nového code-u so flag-om `migration_v5_active` (default false)
+2. Background job behá v pozadí, postupne migruje
+3. Po dokončení nastavíme flag na true
+4. Apka začne čítať len nový schémy
+5. V budúcnosti drop legacy code
+
+## Indexy
+
+Indexy sú **separátne** od schema migrácií, ale často idú spolu.
+
+### Vytvorenie indexu
+
+```typescript
+await collection.createIndex(
+  { field: 1 },
+  { background: true, name: 'idx_field_1' }
+);
+```
+
+`background: true` — index sa stavia bez blokovania write operácií. Atlas to tak robí by default, ale explicitne to deklarujeme.
+
+### Drop indexu
+
+```typescript
+await collection.dropIndex('idx_old_field_1');
+```
+
+Drop je rýchly (metadata operation), no môže krátkodobo spomaliť query, ktoré ten index používali.
+
+### Index na šifrovanom poli
+
+Pre CSFLE-šifrované polia (rodné číslo) sa indexy môžu vytvoriť len na **deterministic encryption** (nie randomized). Toto je technické obmedzenie MongoDB.
+
+```typescript
+const Person_CsfleConfig = {
+  identifierNational: {
+    encrypt: { algorithm: 'AEAD_AES_256_CBC_HMAC_SHA_512-Deterministic' }
+  },
+};
+
+// Index funguje
+await collection.createIndex({ identifierNational: 1 }, { unique: true });
+```
+
+## Cross-service migrations
+
+Niektoré zmeny vyžadujú migráciu cez viacero služieb.
+
+### Príklad: pridanie poľa v Person, ktoré reflektujú aj activity-mcp a courier-mcp
+
+1. **PR 1**: pridať `Person.languagePreference` v registry-mcp + migration
+2. **PR 2**: activity-mcp a courier-mcp začnú toto pole čítať (forward compat)
+3. Deploy v poradí: registry-mcp → activity-mcp → courier-mcp
+
+Pri reverse poradí (activity-mcp najprv) by activity-mcp čítal pole, ktoré ešte neexistuje.
+
+### Pravidlo
+
+**Producer pred consumer**. Service, ktorý pole pridáva, nasadený prv. Service, ktorý ho číta, nasadený potom.
+
+## Testovanie migrácií
+
+### Lokálne
+
+```bash
+# Aplikovať
+npm run migrate:up
+
+# Status
+npm run migrate:status
+```
+
+Lokálne MongoDB má test data set s niekoľko stovkami dokumentov per collection.
+
+### Staging
+
+Staging má **clone of production data** (anonymizovaný). Pred production deploy sa migrácia testuje proti staging-u.
+
+### Production
+
+Pre kritické migrácie sa robí **dry run** najprv:
+
+```bash
+npm run migrate:dry-run
+```
+
+To prejde celú migráciu, ale namiesto write operations zaznamená len `would update X documents`. Ukáže approximate čas, počet dokumentov.
+
+## Rollback strategie
+
+### Pri zlyhaní migrácie
+
+Migrácia sa zachytí — buď dokončí (s úspechom), alebo zlyhá v polovici. Pri zlyhaní:
+
+1. Stav DB je čiastočne zmenený (niektoré dokumenty migrované, niektoré nie)
+2. **Lazy migration** v aplikácii to handluje — staré dokumenty sa migrujú pri čítaní
+3. Forensic check — `migrations.progress` ukáže, kde sa zaseklo
+4. Pri vážnych chybách: napísať fix-up migráciu
+
+### Pri kritickom probléme po deployi
+
+1. **Code rollback** (revert image v Cloud Run / k8s)
+2. DB schémy zostávajú forward — lebo sú backward compat
+3. Stary code číta nové dokumenty (ignoruje nové polia)
+4. Investigácia, fix, re-deploy
+
+### Catastrophic problém
+
+Ak migrácia *poškodila* dáta (write error, race condition):
+
+1. Stop write traffic (maintenance mode)
+2. Point-in-time recovery z backup-u
+3. Apply known-good migrations
+4. Resume traffic
+5. Post-mortem
+
+## Audit a observability
+
+### Metriky migration job-u
+
+- Migration version applied
+- Documents processed
+- Errors / retries
+- Duration
+
+V Grafana dashboarde — alert pri abnormálnej dĺžke alebo error rate.
+
+### Audit log
+
+Pri každom apply migration:
+
+```typescript
+await db.collection('migrations.applied').insertOne({
+  version: 5,
+  description: '...',
+  appliedAt: new Date(),
+  appliedBy: 'CI deployment v1.4.2',
+  duration: 12345,  // ms
+  documentsProcessed: 14523,
+});
+```
+
+## Otvorené otázky
+
+1. **Schema validation v MongoDB** — JSON Schema validátor v collection sa update-uje s každou schémovou zmenou. Synchronizácia so Zod schémou je TBD (potencionálne automated cez code-gen).
+
+2. **Migrácia rovnakého collection naprieč viacerými service-mi** — ak by to nastalo, kto vlastní schému? Default: **každá collection patrí jednému service**.
+
+3. **Zero-downtime data type changes** — niektoré (napr. ObjectId → UUID) sú extrémne ťažké zero-downtime. TBD plánovať pre špecifické cases.
+
+4. **Schema registry** — centrálny register schém naprieč servismi (zdielané packages) je v repo, ale neexistuje runtime registry. Pre future zvážiť tools ako Buf alebo Confluent schema registry.
+
+## Nasleduje
+
+Pre deployment pokračuj v [deployment](deployment).
+Pre rate limity pokračuj v [rate-limits](rate-limits).
+Pre Atlas Search pokračuj v [atlas-search](atlas-search).

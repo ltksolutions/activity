@@ -1,0 +1,362 @@
+# Deployment
+
+Tento dokument popisuje **deployment topológiu** systému, **environments**, **CI/CD pipeline** a **monitoring**.
+
+## Topológia
+
+Systém pozostáva z viacerých nasadiacich jednotiek, každá s vlastnou doménou:
+
+```
+                          ┌──────────────────────────┐
+                          │  CDN / Edge layer        │
+                          │  (Cloudflare)            │
+                          └────────────┬─────────────┘
+                                       │
+        ┌──────────────────┬───────────┼─────────────┬──────────────────┐
+        ▼                  ▼           ▼             ▼                  ▼
+  sportup.sk         activity.sportup.sk  api.        cdn.            docs.activity.sportup.sk
+  (marketing)        (web app)       sportup.sk  sportup.sk      (Nextra)
+  Vercel             Vercel          REST proxy   S3 + CDN        Vercel
+                                     ↓
+                                ┌────┴────┐
+                                ▼         ▼
+                          MCP servers   auth.activity.sportup.sk
+                          (Fastify)     (OIDC provider)
+                                ↓
+                          MongoDB Atlas
+                          + Redis (Pub/Sub, cache)
+```
+
+### Subdomény a ich účel
+
+| Doména | Účel | Hosting | Typ |
+|---|---|---|---|
+| `sportup.sk` | Marketing landing | Vercel | Statický + ISR |
+| `activity.sportup.sk` | Hlavná web aplikácia | Vercel | Next.js 15 SSR |
+| `admin.activity.sportup.sk` | Administrátorské UI | Vercel | Next.js 15 SSR |
+| `api.activity.sportup.sk` | REST API gateway (proxy nad MCP) | Cloud Run / k8s | Fastify |
+| `auth.activity.sportup.sk` | OIDC provider | Cloud Run / k8s | Custom Fastify alebo Keycloak |
+| `registry-mcp.activity.sportup.sk` | registry-mcp server | Cloud Run / k8s | Fastify + MCP SDK |
+| `activity-mcp.activity.sportup.sk` | activity-mcp server | Cloud Run / k8s | Fastify + MCP SDK |
+| `courier-mcp.activity.sportup.sk` | courier-mcp server | Cloud Run / k8s | Fastify + MCP SDK |
+| `cdn.activity.sportup.sk` | Static assets (loga, atď.) | Cloudflare R2 / S3 + CDN | Static |
+| `status.activity.sportup.sk` | Statusová stránka | Statuspage / vlastné | Statický |
+| `docs.activity.sportup.sk` | Vývojárska dokumentácia | Vercel | Nextra |
+
+### Custom domény organizácií
+
+Pre on-demand TLS pre custom domény (napríklad `clenovia.sfz.sk` ktorá pointuje na náš systém) používame **Caddy** ako edge proxy:
+
+```
+                          ┌────────────────────┐
+                          │  clients.activity.sportup.sk│  (CNAME target)
+                          │  Caddy on-demand   │
+                          │  TLS               │
+                          └─────────┬──────────┘
+                                    │
+                                    ▼
+                          ┌────────────────────┐
+                          │  activity.sportup.sk    │  (proxy backend)
+                          └────────────────────┘
+```
+
+Workflow custom domény:
+1. Admin organizácie pridá `OrganizationDomain(hostname: 'clenovia.sfz.sk')`
+2. Systém vygeneruje verify token
+3. Admin nastaví DNS:
+   - CNAME `clenovia.sfz.sk` → `clients.activity.sportup.sk`
+   - TXT `_sportup_verify.clenovia.sfz.sk` → `<token>`
+4. Verify endpoint kontroluje TXT, po úspešnom statuse → `active`
+5. Caddy on-demand TLS issue Let's Encrypt cert pri prvom requeste
+6. Subsequent requesty fungujú s certifikátom
+
+## Environments
+
+### `dev`
+
+**Účel:** lokálny vývoj.
+
+- MongoDB lokálne (Docker)
+- Redis lokálne (Docker)
+- MCP servery cez `npm run dev` (s file watching)
+- Frontend cez `next dev`
+- Mock-ované external services (sportup.sk integrácia, payment processor)
+
+### `staging`
+
+**Účel:** integračné testy, demo, akceptačné testy.
+
+- MongoDB Atlas — sample tier
+- Redis Cloud — small instance
+- Cloud Run / k8s s 1-2 inštanciami
+- Real OIDC, real domain (napr. `staging.activity.sportup.sk`)
+- Mock-ované sportup.sk (alebo dedikovaný staging)
+- Test dáta, žiadne real-life subjekty
+
+Deploy: automaticky pri push na `main` branch.
+
+### `production`
+
+**Účel:** live systém.
+
+- MongoDB Atlas — M30 tier (alebo vyšší podľa rastu)
+- Redis Cloud / Upstash
+- Cloud Run / k8s s autoscaling (min 2, max 20 inštancií per service)
+- Real OIDC, real domain
+- Real integration s sportup.sk (read-only initially)
+- Real subjects, real data
+
+Deploy: manuálny po schválení (gate v CI).
+
+## Containerization
+
+Každý service má Dockerfile. Image registry: GitHub Container Registry alebo Cloudflare R2.
+
+```dockerfile
+# Príklad pre registry-mcp
+FROM node:22-alpine
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --production
+COPY dist/ ./dist/
+
+ENV NODE_ENV=production
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]
+```
+
+Multi-stage build pre menšiu production image.
+
+## CI/CD pipeline
+
+### CI (GitHub Actions)
+
+Pri každom push:
+
+```yaml
+jobs:
+  lint:
+    - eslint
+    - prettier check
+    - typescript check
+
+  test:
+    - unit tests (Vitest)
+    - integration tests (per service, s test MongoDB v Docker)
+    - e2e tests (Playwright, vyžaduje staging-like env)
+
+  build:
+    - npm run build (per service)
+    - Docker image build
+    - Push do registry (s tagom = git SHA)
+
+  audit:
+    - npm audit
+    - container scan (Trivy)
+    - secrets scan (Gitleaks)
+```
+
+CI musí prejsť pred merge do `main`.
+
+### CD pre staging
+
+Pri push do `main`:
+1. CI prejde (cez branch protection)
+2. Workflow rolls out images do staging
+3. Smoke tests
+4. Notifikácia v Slack o úspechu / failure
+
+### CD pre production
+
+Po release tag (npr. `v1.2.3`):
+1. Manuálny gate (admin schvaľuje deploy)
+2. Database migrations (idempotentné, transactional)
+3. Rolling update services (1 pod at a time, health check)
+4. Verify deploy (synthetic monitoring)
+5. Notifikácia + audit log
+
+### Rollback
+
+Pri detekovanej chybe v produkcii:
+- One-click rollback v CI/CD (vráti predchádzajúce image tag)
+- Database migrations sú **forward-only** (rollback len vyžaduje code revert, nie DB schema revert) — schémy sú backward-compatible aspoň 2 versions
+
+## Database migrations
+
+### Princípy
+
+1. **Idempotentné** — aplikovať dvakrát = rovnaký výsledok ako raz
+2. **Forward-only** — žiadne `down` migrácie. Pri probléme sa píše nová migrácia, ktorá fixne stav.
+3. **Backward-compatible** — staré aplikačné verzie musia stále fungovať aspoň 2 release-y dozadu
+
+### Štruktúra
+
+```
+registry-mcp/
+├── migrations/
+│   ├── 001-initial-schema.ts
+│   ├── 002-add-license-fields.ts
+│   ├── 003-codelist-translations.ts
+│   └── ...
+```
+
+Každá migrácia exportuje:
+
+```typescript
+export async function up(db: Db): Promise<void> {
+  // ALTER schema, indexes, data backfill
+}
+
+export const version = 3;
+```
+
+### Spustenie
+
+V CI deploy procesu:
+
+```
+1. Compare currentDbVersion vs targetVersion
+2. Apply všetky pending migrations v poradí, transakčne
+3. Update version v special collection migrations.applied
+```
+
+Pri zlyhaní v polovici: transakcia rollback, deploy fails, alert.
+
+## Monitoring a observability
+
+### Stack
+
+- **Logging**: Pino (structured JSON logs) → CloudWatch / Loki
+- **Metrics**: Prometheus / OpenTelemetry → Grafana
+- **Tracing**: OpenTelemetry → Jaeger / Tempo
+- **Errors**: Sentry
+- **Synthetic monitoring**: cron pings → status.activity.sportup.sk
+- **Real User Monitoring**: Vercel Analytics + Sentry
+
+### Kľúčové metriky
+
+#### Per service
+
+- Request rate (req/s)
+- Response time (p50, p95, p99)
+- Error rate
+- Active connections
+
+#### Database
+
+- Query rate
+- Slow queries (>100ms)
+- Connection pool utilization
+- Replica lag
+
+#### Business metriky
+
+- Aktívni používatelia (DAU, MAU)
+- Nové registrácie
+- Vytvorené aktivity per typ
+- Mentoringové sedenia per týždeň
+- Courier správy (volumen, error rate)
+
+### Alerting
+
+Pre kritické metriky → PagerDuty / on-call:
+
+| Metrika | Threshold | Severity |
+|---|---|---|
+| Error rate | >5% za 5 minút | High |
+| Response time p95 | >2s za 10 minút | Medium |
+| MongoDB disk | >80% | High |
+| Replica lag | >10s | High |
+| SSE connections | >5000 per node | Medium |
+
+### Dashboards
+
+V Grafana per service:
+- Service dashboard (req rate, latencies, errors)
+- Database dashboard (queries, slow ops)
+- Business dashboard (DAU, activity counts)
+- SLO dashboard (error budget, availability)
+
+## Bezpečnosť
+
+### Network
+
+- Všetky služby v privátnej VPC
+- Externe prístupné len cez load balancer (HTTPS only, TLS 1.3)
+- Inter-service komunikácia cez mTLS (TBD pre advanced security)
+
+### Secrets
+
+- **Doppler** alebo **Google Secret Manager** pre secrets
+- Žiadne secrets v code, env files, logs
+- Rotácia podľa typu (DB password ročne, API keys polročne)
+
+### Rate limiting
+
+Detailne v [rate-limits](rate-limits).
+
+### DDoS protection
+
+Cloudflare DDoS protection + AWS Shield (alebo ekvivalent).
+
+### Vulnerability management
+
+- Týždenný scan závislostí (npm audit, Snyk)
+- Mesačný container scan (Trivy)
+- Quarterly external penetration test (od roku 2027)
+
+## Disaster recovery
+
+### Backupy
+
+MongoDB Atlas:
+- Continuous backups (point-in-time recovery)
+- Daily snapshots (30 dní retention)
+- Weekly snapshots (12 mesiacov)
+- Monthly snapshots (7 rokov, off-site)
+
+### Recovery scenáre
+
+| Scenár | RPO | RTO | Procedúra |
+|---|---|---|---|
+| Single pod crash | 0 | <1 min | Auto-restart |
+| Region outage | <5 min | <30 min | Failover do druhého regiónu |
+| Database corruption | <1 hour | <4 hours | Point-in-time recovery |
+| Catastrophic loss | <24 hours | <8 hours | Restore from monthly snapshot |
+
+### DR drills
+
+Štvrťročné DR drills — náhle simulované výpadky, full recovery procedúra. Documented v `runbooks/`.
+
+## Cost management
+
+### Optimalizácia
+
+- Cloud Run / k8s autoscaling — platíme len za reálnu spotrebu
+- MongoDB Atlas — auto-scaling tier (M10 → M20 → M30 podľa rastu)
+- Redis — Upstash serverless (pay-per-request)
+- CDN — Cloudflare (free tier pre štart)
+
+### Monitoring costs
+
+- Mesačný report nákladov per service
+- Alerting pri 20% nárast oproti baseline
+- Quarterly review s budget plánovaním
+
+## Otvorené otázky
+
+1. **Multi-region deployment** — pre disaster recovery a compliance s EU regulami. Pre MVP single region (EU-Central / Frankfurt). Multi-region v Q3+.
+
+2. **Edge compute** — Cloudflare Workers pre auth, simple lookups. Vyžaduje refaktoring pre edge-compatible kód.
+
+3. **Self-hosted vs managed** — momentálne managed (Cloud Run, MongoDB Atlas). Pri raste môžeme prejsť na self-hosted k8s pre optimalizáciu nákladov.
+
+4. **Compliance certifikácie** — ISO 27001, SOC 2 Type II. Plánované od roku 2027.
+
+## Nasleduje
+
+Pre retenciu a GDPR pokračuj v [retention-and-gdpr](retention-and-gdpr).
+Pre rate limity pokračuj v [rate-limits](rate-limits).
+Pre database migrations pokračuj v [migrations](migrations).
