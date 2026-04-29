@@ -78,7 +78,7 @@ Iné varianty (záležia od preferencie organizácie):
 - *"Rodič Adamka Nováka"* (anonymizovanejšie)
 - *"P. Novák (rodič Adamka)"* (skratené)
 
-Pre MVP fixná voľba: *"{Plné meno rodiča} (rodič {Krstné meno dieťaťa})"*. Neskôr parametrizovateľné.
+Pre MVP fixná voľba: `"{Plné meno rodiča} (rodič {Krstné meno dieťaťa})"`. Neskôr parametrizovateľné.
 
 ### Pravidlá pre vytvorenie proxy
 
@@ -141,7 +141,7 @@ Pri pozývaní účastníka do skupinovej konverzácie (`group`) algoritmus:
 
 1. Vlastnícu organizáciu konverzácie zistíme z `Conversation.owningOrgId`
 2. `minorSelfJoinAge` z tejto organizácie
-3. Ak je pozývaný neplnoletý (vek < `minorSelfJoinAge`):
+3. Ak je pozývaný neplnoletý (vek \< `minorSelfJoinAge`):
    - hľadá sa `ParentalAccess`, pridá sa rodič ako proxy
 4. Ak je pozývaný neplnoletý (vek >= `minorSelfJoinAge`):
    - dieťa je pridané ako direct účastník
