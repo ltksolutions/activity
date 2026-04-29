@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 245" role="img" aria-label="activity UP">
+  <title>activity UP</title>
+  <path d="M860,14 L102,14 C50,14 8,55 6,108 C4,165 25,225 95,228 L860,228 C875,228 890,213 895,200 L902,138 C905,120 903,100 896,82 L888,30 C884,17 874,14 860,14 Z" fill="#FFFFFF"/>
+  <text x="55" y="180" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="180" font-weight="900" font-style="italic" fill="#1A2D47" letter-spacing="-4">activity</text>
+  <text x="900" y="180" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="190" font-weight="900" font-style="italic" fill="#C8102E" letter-spacing="-3">UP</text>
+</svg>

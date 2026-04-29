@@ -4,19 +4,25 @@ import { DocsThemeConfig } from 'nextra-theme-docs';
 /**
  * Theme konfigurácia pre docs.activity.sportup.sk
  *
- * Branding (logo, accent farby) preberáme z Design manuálu pre sportup.sk.
- * Pri nasadení vlož finálne logo do /public/logo.svg a aktualizuj
- * primaryHue podľa branding farby.
+ * Brand: navy + red (slovenská národná farebnosť)
+ * Founded on sportup.sk Design Manual v2.0 · 2026
  */
 const config: DocsThemeConfig = {
-  // Logo a brand
+  // Logo — SVG image z /public
   logo: (
-    <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-      <span style={{ color: 'var(--brand-color, currentColor)' }}>act</span>ivity
-      <span style={{ marginLeft: '0.5rem', opacity: 0.6, fontWeight: 400, fontSize: '0.9rem' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <img src="/logo.svg" alt="activity" height={28} style={{ display: 'block' }} />
+      <span
+        style={{
+          marginLeft: '0.25rem',
+          opacity: 0.5,
+          fontWeight: 400,
+          fontSize: '0.85rem',
+        }}
+      >
         docs
       </span>
-    </span>
+    </div>
   ),
   logoLink: '/',
 
@@ -25,19 +31,17 @@ const config: DocsThemeConfig = {
     link: 'https://github.com/ltksolutions/activity',
   },
 
-  // Hlavička
+  // Banner pre MVP
   banner: {
     key: 'mvp-banner',
     text: 'Dokumentácia popisuje MVP fázu projektu. Niektoré features sú TBD.',
     dismissible: true,
   },
 
-  // Navigácia v hlavičke
   navbar: {
     extraContent: null,
   },
 
-  // Sidebar
   sidebar: {
     defaultMenuCollapseLevel: 1,
     toggleButton: true,
@@ -48,13 +52,16 @@ const config: DocsThemeConfig = {
     text: (
       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
         <span>
-          © {new Date().getFullYear()} sportup. Open source pod{' '}
+          © {new Date().getFullYear()} activity. Open source pod{' '}
           <a href="https://github.com/ltksolutions/activity" target="_blank" rel="noopener">
             ltksolutions/activity
           </a>
         </span>
         <span style={{ opacity: 0.6 }}>
-          Postavené na <a href="https://nextra.site" target="_blank" rel="noopener">Nextra</a>
+          Klient projektu{' '}
+          <a href="https://github.com/ltksolutions/sportup.sk" target="_blank" rel="noopener">
+            sportup.sk
+          </a>
         </span>
       </div>
     ),
@@ -74,7 +81,7 @@ const config: DocsThemeConfig = {
   // Search (zatiaľ vypnutý pre MVP)
   search: {
     placeholder: 'Vyhľadávanie zatiaľ nie je dostupné',
-    component: null, // null vypne search bar
+    component: null,
   },
 
   // SEO a meta
@@ -82,58 +89,78 @@ const config: DocsThemeConfig = {
     <>
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta name="description" content="Dokumentácia projektu activity — platforma pre slovenský šport" />
-      <meta name="og:title" content="activity — dokumentácia" />
-      <meta name="og:description" content="Verejná technická a produktová dokumentácia projektu activity" />
-      <meta name="og:image" content="/og-image.png" />
-      <meta name="theme-color" content="var(--brand-color, #0F6E56)" />
-      <link rel="icon" href="/favicon.ico" />
+      <meta name="description" content="Dokumentácia projektu activity — platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom športe" />
+
+      {/* Favicon set */}
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+      <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+      {/* Open Graph */}
+      <meta property="og:title" content="activity — dokumentácia" />
+      <meta property="og:description" content="Verejná technická a produktová dokumentácia projektu activity" />
+      <meta property="og:image" content="https://docs.activity.sportup.sk/og-image.png" />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:type" content="website" />
+
+      {/* Twitter Card */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:image" content="https://docs.activity.sportup.sk/og-image.png" />
+
+      {/* Theme color (navy) */}
+      <meta name="theme-color" content="#1A2D47" />
     </>
   ),
 
-  // Page title template
   useNextSeoProps() {
     return {
       titleTemplate: '%s — activity docs',
     };
   },
 
-  // Dark mode
+  // Dark mode podporované
   darkMode: true,
 
-  // Locale
-  i18n: [
-    { locale: 'sk', text: 'Slovenčina' },
-  ],
+  i18n: [{ locale: 'sk', text: 'Slovenčina' }],
 
-  // Default lang for HTML
+  /**
+   * Brand farby pre Nextra téma.
+   *
+   * Nextra používa HSL farby cez primaryHue + primarySaturation.
+   * Pre activity brand red #C8102E:
+   *   HSL(351, 85%, 42%)
+   * Pre navy #1A2D47:
+   *   HSL(216, 47%, 19%)
+   *
+   * Používame red ako primárny accent (linky, akcie, hover stavy).
+   * Navy zostáva ako tmavá identitná farba (footer, dark mode pozadie).
+   */
   primaryHue: {
-    dark: 165,   // brand color hue v dark mode (zelený-tyrkysový)
-    light: 165,  // brand color hue v light mode
+    dark: 351,   // red v dark mode
+    light: 351,  // red v light mode
   },
   primarySaturation: {
-    dark: 60,
-    light: 75,
+    dark: 75,
+    light: 78,
   },
 
-  // Toc
   toc: {
     backToTop: true,
     title: 'Na tejto stránke',
   },
 
-  // Navigácia
   navigation: {
     prev: true,
     next: true,
   },
 
-  // Color mode
   nextThemes: {
     defaultTheme: 'system',
   },
 
-  // Misc
   gitTimestamp: ({ timestamp }) => (
     <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
       Posledná aktualizácia: {timestamp.toLocaleDateString('sk-SK')}

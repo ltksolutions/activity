@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="activity UP">
+  <title>activity UP</title>
+  <!-- Navy pozadie so zaoblenymi rohmi -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" fill="#1A2D47"/>
+  <!-- "A" v bielej (italic, bold) -->
+  <text x="80" y="730" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="900" font-weight="900" font-style="italic" fill="#FFFFFF" letter-spacing="-30">A</text>
+  <!-- "U" v cervenej (italic, bold) -->
+  <text x="500" y="900" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="900" font-weight="900" font-style="italic" fill="#C8102E" letter-spacing="-30">U</text>
+</svg>
