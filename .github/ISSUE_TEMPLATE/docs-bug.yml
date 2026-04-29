@@ -1,0 +1,42 @@
+name: 🐛 Bug v dokumentácii
+description: Nahlás chybu, nepresnosť alebo broken link v dokumentácii
+labels: ["docs:bug"]
+title: "[docs:bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vďaka, že nahlasuješ chybu v dokumentácii. Opíš ju čo najpresnejšie.
+
+  - type: input
+    id: page
+    attributes:
+      label: Ktorá stránka?
+      description: URL alebo cesta k súboru (napr. `apps/docs/pages/features/mentoring.mdx` alebo `https://docs.activity.sportup.sk/features/mentoring`)
+      placeholder: apps/docs/pages/features/mentoring.mdx
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Popis chyby
+      description: Čo je nesprávne, nepresné alebo nečitateľné?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Čo by tam malo byť?
+      description: Aký je správny stav?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Dodatočný kontext
+      description: Screenshoty, citácie, čokoľvek užitočné.
+    validations:
+      required: false

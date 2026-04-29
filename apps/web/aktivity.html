@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aktivity · activity</title>
+  <meta name="description" content="Tréningy, zápasy, lekárske ošetrenia, mentoring, vzdelávanie, dary — všetko v jednej časovej osi s jasnými prístupovými právami." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Preskočiť na obsah</a>
+  <header id="site-header" class="site-header"></header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container-narrow">
+        <h1>Aktivity</h1>
+        <p class="lead">
+          Všetko, čo sa v športovom živote deje, eviduje activity ako <em>aktivitu</em> —
+          generický záznam s časom, trvaním a účastníkmi. Polymorfný systém, ktorý
+          zachytáva tréningy aj antidopingové testy rovnako prirodzene.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Čo je aktivita</h2>
+        <p>
+          Aktivita je <strong>udalosť v čase</strong>. Má dátum a trvanie. Má účastníkov.
+          Je viditeľná pre tých, ktorí majú práva ju vidieť. Žije navždy ako súčasť
+          profesijnej histórie.
+        </p>
+        <p>
+          Každý typ aktivity má svoje špecifické polia (zápas má skóre, tréning má intenzitu,
+          lekárske ošetrenie má diagnózu), ale zdieľajú spoločnú kostru a univerzálne vlastnosti:
+          dajú sa <strong>komentovať</strong>, dajú sa zobraziť v <strong>časovej osi osoby</strong>,
+          dajú sa <strong>vyhľadávať</strong>, majú <strong>auditovaný prístup</strong>.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container">
+        <h2 style="margin-top: 0;">Typy aktivít</h2>
+        <p>activity v MVP fáze pozná tieto typy aktivít:</p>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">💪</div>
+            <h3>Tréning</h3>
+            <p>Kondičná, technická, taktická, regeneračná. RPE, miesto, zúčastnení hráči.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">⚽</div>
+            <h3>Zápas a pretek</h3>
+            <p>Účasť na zápase v ľubovoľnej role — hráč, rozhodca, tréner, delegát.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">🎓</div>
+            <h3>Mentoringové sedenie</h3>
+            <p>Štruktúrované stretnutie mentor ↔ mentee. Detail v <a href="/mentoring.html">samostatnej sekcii</a>.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">⚕️</div>
+            <h3>Lekárske ošetrenie</h3>
+            <p>Vstupné prehliadky, ošetrenia po zraneniach, fyzio sedenia. Citlivé, prísne ACL.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">📚</div>
+            <h3>Vzdelávanie</h3>
+            <p>Kurzy, semináre, antidopingové školenia. Pripočítava kredity k licencii.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">⭐</div>
+            <h3>Hodnotenie zo zápasu</h3>
+            <p>Delegát hodnotí výkon rozhodcu. Štruktúra závisí od športu.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">💰</div>
+            <h3>Dar a podpora</h3>
+            <p>Sponzorské, mecenášsky dar, 2 % z dane, crowdfunding.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">📣</div>
+            <h3>Sponzorská aktivácia</h3>
+            <p>Kampaň, content, prítomnosť na podujatí. Reach a engagement metriky.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">👥</div>
+            <h3>Fanúšikovská interakcia</h3>
+            <p>Hlasovanie, predikcia, návšteva podujatia, kvíz.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Časová os ako základná navigácia</h2>
+        <p>
+          Profil každej osoby má <strong>časovú os</strong> — chronologický zoznam jej aktivít.
+          Tomáš (rozhodca) v nej vidí svoje tréningy, zápasy, mentoringové sedenia, hodnotenia,
+          vzdelávanie. Všetko zoradené, každá aktivita s ikonou typu.
+        </p>
+        <p>
+          Prefiltrovať si môže len niektoré typy (napríklad <em>"posledný mesiac všetky zápasy"</em>),
+          alebo sa pohybovať v čase späť do svojej kariéry.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Polymorfné komentáre</h2>
+        <p>
+          Pod každou aktivitou môže prebiehať <strong>diskusia</strong>. Mentor s mentee komentujú
+          mentoringové sedenie. Tréner s hráčom komentujú tréningový plán. Klubový lekár s fyziom
+          riešia v komentároch detail rehabilitačného plánu.
+        </p>
+        <p>
+          Komentáre <em>nie sú</em> chat — sú to formalizované diskusie pripevnené ku konkrétnemu
+          záznamu. Pri zmene mentora sa diskusia pod každým sedením zachová.
+        </p>
+        <p>
+          Kto vidí komentáre, závisí od typu aktivity. Pri lekárskom ošetrení tréner komentáre
+          nevidí (ani záznam). Pri tréningovom pláne ich vidí celý realizačný tím.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/features/activity-comments" class="btn-link" target="_blank" rel="noopener">
+            Detail komentárov v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Citlivé aktivity</h2>
+        <p>
+          Niektoré aktivity sú zo svojej povahy <strong>citlivé</strong> — lekárske ošetrenia,
+          mentoringové sedenia, antidopingové záznamy. Pre tieto platia prísnejšie pravidlá:
+        </p>
+        <ul>
+          <li><strong>Užší okruh prístupu</strong> — napríklad tréner nikdy nevidí lekárske záznamy hráča</li>
+          <li><strong>Audit log</strong> — každé otvorenie sa loguje, vrátane mena a času</li>
+          <li><strong>Šifrovanie</strong> — diagnóza je v databáze šifrovaná, dešifruje sa až pri zobrazení oprávnenému užívateľovi</li>
+          <li><strong>Dlhšia retencia</strong> — lekárske záznamy 20 rokov (slovenský zákon o zdravotnej starostlivosti)</li>
+        </ul>
+        <p>
+          Pri detskom športe má rodič ako právny zástupca <strong>plný prístup</strong>
+          ku lekárskym záznamom svojho dieťaťa, bez redigovania.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="/courier.html" class="btn-link">Ako funguje rodičovský proxy v komunikácii →</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mentoring · activity</title>
+  <meta name="description" content="Štruktúrovaný mentoringový systém pre slovenský šport — sedenia, externí mentori UEFA/FIFA, súkromné poznámky, kompletná história kariéry." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Preskočiť na obsah</a>
+  <header id="site-header" class="site-header"></header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container-narrow">
+        <h1>Mentoring</h1>
+        <p class="lead">
+          Štruktúrované vedenie mladých odborníkov — od formálneho prvého sedenia
+          až po medzinárodnú UEFA / FIFA úroveň. activity zachytáva celý príbeh kariéry
+          a robí mentoring viditeľným.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Prečo systém pre mentoring</h2>
+        <p>
+          V slovenskom športe existuje mentoring desiatky rokov — bývalí reprezentanti, skúsení
+          rozhodcovia a tréneri preberajú mladších. Doteraz to ale prebiehalo neformálne:
+          telefonát, káva po zápase, e-mail. Žiadny záznam, žiadna kontinuita pri zmene mentora,
+          žiadna spätná väzba pre komisie.
+        </p>
+        <p>
+          activity tento proces neformalizuje preč — kávu po zápase nahradiť nemôžeme ani nechceme.
+          Ale ponúka <strong>štruktúru</strong>, ktorá umožní:
+        </p>
+        <ul>
+          <li>zachytiť dôležité sedenia tak, aby ich obaja účastníci mali na očiach</li>
+          <li>komisii rozhodcov vidieť, že mentoring reálne prebieha</li>
+          <li>kontinuitu pri zmene mentora alebo postupe na vyššiu úroveň</li>
+          <li>prípadne externému mentorovi (UEFA, FIFA) vidieť celý príbeh, keď sa pridá do cyklu</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Príbeh: Tomáš a Peter</h2>
+        <p>
+          Aby boli koncepty zrozumiteľné, povedieme cez nich konkrétny príbeh.
+        </p>
+
+        <div class="story">
+          <div class="story-meta">SEPTEMBER 2025</div>
+          <h3>Tomáš začína kariéru</h3>
+          <p>
+            Tomáš (24 rokov) je čerstvý rozhodca tretej ligy — práve absolvoval základné vzdelávanie.
+            Komisia rozhodcov SFZ mu pridelí mentora: <strong>Petra Nováka</strong>, skúseného rozhodcu
+            s UEFA licenciou.
+          </p>
+          <p>
+            Peter v aplikácii zakladá <strong>MentoringCycle</strong> — kontainer, ktorý bude
+            niekoľko rokov združovať všetky ich sedenia.
+          </p>
+        </div>
+
+        <div class="story">
+          <div class="story-meta">PRVÉ MESIACE</div>
+          <h3>Pravidelné sedenia</h3>
+          <p>
+            Po každom Tomášovom dôležitejšom zápase si dohodnú <strong>sedenie</strong> — niekedy
+            v kaviarni, niekedy cez video. Peter potom zaznamená do aplikácie, čo prebrali:
+            ktoré situácie zo zápasu rozoberali, ako Tomáš reagoval, čo má pred ďalším zápasom skúsiť.
+          </p>
+          <p>
+            Tomáš dostane notifikáciu po každom uloženom sedení a môže si ho prečítať.
+            Pri otázkach ho môže komentovať priamo pod sedením.
+          </p>
+        </div>
+
+        <div class="story">
+          <div class="story-meta">PO 8 MESIACOCH</div>
+          <h3>Pridáva sa UEFA mentor</h3>
+          <p>
+            Tomáš sa stáva kandidátom na UEFA listinu. Peter sa s ním dohodne, že do cyklu
+            pridajú <strong>externého mentora</strong> z UEFA — Roberta Rosettiho.
+          </p>
+          <p>
+            Roberto má v activity tzv. <em>ľahkú identitu</em> — nemusí mať plný účet, vidí len
+            tento jeden cyklus a môže komentovať sedenia. Žiaden iný prístup do systému.
+          </p>
+        </div>
+
+        <div class="story">
+          <div class="story-meta">PO 3 ROKOCH</div>
+          <h3>Cyklus sa uzatvára</h3>
+          <p>
+            Tomáš sa po troch rokoch dostane na UEFA listinu, čo bolo cieľom cyklu.
+            Peter cyklus uzavrie s <strong>finálnym hodnotením</strong> — kompaktný text,
+            ktorý zhŕňa, čím Tomáš prešiel.
+          </p>
+          <p>
+            Cyklus sa zamkne. Sedenia v ňom zostávajú navždy ako súčasť Tomášovej profesijnej histórie.
+            Tomáš môže zacať nový cyklus — napríklad ako <em>mentor</em> mladšieho kolegu.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Dva kľúčové koncepty</h2>
+        <p>
+          Aby sme porozumeli štruktúre v aplikácii, treba poznať rozdiel medzi
+          dvomi entitami, ktoré znejú podobne, ale fungujú inak:
+        </p>
+
+        <h3>MentoringCycle (cyklus)</h3>
+        <p>
+          <strong>Kontainer.</strong> Dlhodobý vzťah mentor ↔ mentee, ktorý zoskupuje viaceré sedenia.
+          Trvá mesiace až roky. Zakladá ho vždy mentor.
+        </p>
+        <p>
+          Cyklus má svoj <em>stav</em>: aktívny, pozastavený (pri zranení mentee, prerušení),
+          alebo uzavretý (po dosiahnutí cieľa).
+        </p>
+
+        <h3>MentoringSession (sedenie)</h3>
+        <p>
+          <strong>Aktivita.</strong> Konkrétne stretnutie mentora a mentee, zaznamenané vo formulári.
+          Trvá 30–120 minút. Žije pod konkrétnym cyklom.
+        </p>
+        <p>
+          Mentee môže <em>navrhnúť</em> sedenie cez aplikáciu (rýchly formulár).
+          Vyplniť detail vždy ale musí <strong>mentor</strong> — to je princíp celého systému.
+        </p>
+
+        <div class="callout">
+          <strong>Prečo táto deľba?</strong>
+          <p style="margin-top: 0.5rem;">
+            Mentor má širší kontext (videl viac zápasov mentee, pozná jeho vývoj v čase),
+            takže jeho záznam je váženejší. Mentee má v každom prípade plný prístup k záznamu,
+            môže ho komentovať, prípadne s mentorom diskutovať cez chat.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container">
+        <h2 style="margin-top: 0;">Ako vyzerá záznam sedenia</h2>
+        <p>
+          Toto je príklad záznamu sedenia, ktoré Peter vyplní po Tomášovom zápase.
+          Mentor vidí všetko, mentee vidí všetko <strong>okrem súkromnej poznámky mentora</strong>.
+        </p>
+
+        <div class="mockup">
+          <div class="mockup-bar">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <span>activity.sportup.sk · Sedenie · pohľad mentora</span>
+          </div>
+          <div class="mockup-content mock-session">
+            <div class="mock-header">
+              <div>
+                <div class="mock-title">Mentoringové sedenie · 6.4.2026 14:00</div>
+                <div class="mock-subtitle">Peter Novák ↔ Tomáš Vilček · Cyklus 8 mesiacov</div>
+              </div>
+              <span class="mock-status recorded">✓ Recorded</span>
+            </div>
+
+            <div class="mock-warning">
+              ⚠️ Editovateľné ešte 18:32:14 — po vypršaní bude sedenie uzavreté.
+            </div>
+
+            <div class="mock-section">
+              <div class="mock-section-title">Kedy a ako</div>
+              <div class="mock-field">
+                <div class="mock-label">Forma</div>
+                <div class="mock-value">In-person · 60 minút</div>
+              </div>
+              <div class="mock-field">
+                <div class="mock-label">Miesto</div>
+                <div class="mock-value">Kaviareň Cafe Stará Tržnica, Bratislava</div>
+              </div>
+            </div>
+
+            <div class="mock-section">
+              <div class="mock-section-title">Témy</div>
+              <span class="mock-tag">Pozápasový rozbor</span>
+              <span class="mock-tag">Výklad pravidla</span>
+              <span class="mock-tag">Mentálna príprava</span>
+            </div>
+
+            <div class="mock-section">
+              <div class="mock-section-title">Summary</div>
+              <div class="mock-value-block">
+                Pri rozbore zápasu Slovan – Spartak sme sa zamerali na 78. minútu, kde Tomáš
+                nepísknutie ofsajd v útoku Spartaka. Príčina: zlá pozícia (dlhý čas na strednej línii
+                napriek presunu hry), strata pozornosti po žltej karte. Tomáš sám identifikoval,
+                kde mal byť — toto je veľký pokrok oproti predchádzajúcim sedeniam.
+              </div>
+            </div>
+
+            <div class="mock-section">
+              <div class="mock-section-title">Ďalšie kroky pre Tomáša</div>
+              <div class="mock-value-block">
+                1. Mentálne cvičenie — vizualizácia ofsajd situácií hneď po udelení žltej karty.<br />
+                2. Pozrieť si UEFA kompilát "Offside positioning - 2024 Champions League".<br />
+                3. Reflexia po budúcom zápase: ako sa mu darilo udržať pozíciu po kontroverznom momente.
+              </div>
+            </div>
+
+            <div class="mock-section">
+              <div class="mock-section-title">Kompetenčné tagy</div>
+              <span class="mock-tag">Hra po písknutí</span>
+              <span class="mock-tag">Pozícia v poli</span>
+              <span class="mock-tag">Mentálna stabilita</span>
+            </div>
+
+            <div class="mock-private-note">
+              <div class="mock-section-title">🔒 Súkromná poznámka mentora</div>
+              <p style="font-size: 0.8rem; color: #8b6914; margin-top: 4px; margin-bottom: 8px;">
+                Mentee NEVIDÍ. Tu zapíšeš pozorovania len pre seba.
+              </p>
+              <div class="mock-value-block">
+                Tomáš stále reaguje emotívne na vlastné chyby. Predtým než ho pošlem na medzinárodnú
+                úroveň, treba ešte 1–2 sezóny psychickej práce. Možno ho pošlem na sedenie
+                k mentálnemu koučovi pred ďalším postupom.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p style="margin-top: 1.5rem;">
+          <strong>Mentee pohľad</strong> je takmer rovnaký, ale bez varovného pásu o editácii
+          a <em>bez súkromnej poznámky</em>. Namiesto editácie tam vidí: <em>"Tento záznam vytvoril tvoj
+          mentor — ak niečo nesedí, napíš mu."</em>
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Súkromné poznámky mentora</h2>
+        <p>
+          Toto je dôležitá súčasť systému. Mentor potrebuje miesto, kam zapíše svoje
+          <strong>predbežné dojmy a hypotézy</strong> — veci, ktoré nie sú pripravené pre uši mentee.
+        </p>
+        <p>
+          Príklad: <em>"Janko reaguje agresívne pod tlakom — možno problém z minulosti, treba sledovať."</em>
+          Toto v žiadnom prípade nie je niečo, čo by mal Janko čítať pred Petrom samým — bola by to
+          urážka, neskorá hypotéza a všeobecne kontraproduktívne.
+        </p>
+        <p>
+          Súkromná poznámka <strong>nie je</strong> uložená v hlavnom dokumente sedenia. Žije v inej
+          databázovej collection so svojou prísnou ACL. Nikdy sa neobjaví v API odpovedi pre mentee,
+          ani v notifikácii. Mentor je jediný, kto ju vie čítať.
+        </p>
+        <div class="callout callout-info">
+          Audit log loguje každé čítanie súkromnej poznámky — vrátane mentora samého. To je ochrana
+          pred budúcimi spormi.
+        </div>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container">
+        <h2 style="margin-top: 0;">Notifikácie a prepojenie s chatom</h2>
+        <p>
+          Po každom uloženom sedení dostane mentee notifikáciu — v aplikácii aj e-mailom.
+        </p>
+
+        <div class="mock-notification unread">
+          <div class="mock-notification-icon">📋</div>
+          <div class="mock-notification-content">
+            <div class="mock-notification-title">Nové sedenie zaznamenané</div>
+            <div class="mock-notification-text">
+              Peter Novák zaznamenal sedenie z 6. apríla. Témy: Pozápasový rozbor, Výklad pravidla.
+            </div>
+            <div class="mock-notification-time">pred 2 hodinami</div>
+          </div>
+        </div>
+
+        <div class="mock-notification">
+          <div class="mock-notification-icon" style="background: #6366f1;">💬</div>
+          <div class="mock-notification-content">
+            <div class="mock-notification-title">Nový komentár pod sedením</div>
+            <div class="mock-notification-text">
+              Roberto Rosetti (UEFA mentor) komentoval sedenie z 6. apríla.
+            </div>
+            <div class="mock-notification-time">pred 1 dňom</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top: 2rem;">Most z chatu do sedenia</h3>
+        <p>
+          Mentor a mentee si môžu kedykoľvek písať v chate — <a href="/courier.html">Courier</a>.
+          Niekedy z chatu vznikne diskusia, ktorá si zaslúži formálny záznam ako sedenie.
+          Vtedy mentor v chate označí rozsah správ a klikne <em>"Vytvoriť sedenie z týchto správ"</em>.
+        </p>
+        <p>
+          V detaile sedenia sa potom zobrazuje read-only embed s týmito správami — kontext sa nestratí.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Kto vidí čo</h2>
+        <p>
+          Mentoring je citlivá časť systému. Nasledujúca tabuľka ukazuje, kto má aké práva
+          v aktívnom cykle.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Rola</th>
+              <th>Číta sedenia</th>
+              <th>Píše sedenia</th>
+              <th>Komentuje</th>
+              <th>Súkromná poznámka</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Mentor cyklu</td>
+              <td>✓</td>
+              <td>✓ (jediný)</td>
+              <td>✓</td>
+              <td>✓ (jediný)</td>
+            </tr>
+            <tr>
+              <td>Mentee cyklu</td>
+              <td>✓</td>
+              <td>—</td>
+              <td>✓</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Externý mentor (UEFA)</td>
+              <td>✓</td>
+              <td>—</td>
+              <td>✓</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Predseda komisie</td>
+              <td>✓</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Admin organizácie</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Iný používateľ</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/acl/matrix-comments" target="_blank" rel="noopener" class="btn-link">
+            Detailná ACL matica v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Editačné okno: 24 hodín</h2>
+        <p>
+          Po uložení záznamu má mentor <strong>24 hodín</strong> na úpravy — preklepy, doplnenia,
+          opravy. UI to zobrazuje výrazným odpočtom (<em>"Editovateľné ešte 18:32:14"</em>).
+          Po vypršaní sa záznam zamkne.
+        </p>
+        <p>
+          Prečo nie nekonečné editácie? Mentor by mohol post-hoc upraviť záznam tak, aby si
+          mentee nepamätal, čo mu sľúbil; alebo aby retrospektívne hodil zlé svetlo na mentee. Pevné
+          okno 24 h nedáva priestor takejto manipulácii.
+        </p>
+        <p>
+          Pre opravy po 24 h existuje admin moderation cesta s viditeľným audit záznamom.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Pre koho je mentoring relevantný</h2>
+        <p>
+          Mentoring v systéme bol navrhnutý <strong>najprv pre rozhodcov</strong> — to je oblasť,
+          kde má slovenský šport najsilnejšiu mentoringovú tradíciu (Komisia rozhodcov SFZ).
+          Ale systém je generický a aplikuje sa rovnako na:
+        </p>
+        <ul>
+          <li><strong>Trénerov</strong> — mladší tréner s bývalým reprezentantom alebo head trénerom</li>
+          <li><strong>Lekárov a fyziotereutov</strong> — školenie nového klubového lekára skúseným kolegom</li>
+          <li><strong>Mentálnych koučov</strong> — supervízia pri ťažkých prípadoch</li>
+          <li><strong>Funkcionárov</strong> — odovzdávanie know-how pri zmene predsedu komisie</li>
+        </ul>
+        <p>
+          Nemusí ísť o slovenský pár — externý mentor môže byť kdekoľvek v Európe. UEFA mentor
+          z Talianska, FIFA mentor z Anglicka — systém ich pridá ako ľahké identity, ktorá vidí
+          len konkrétny cyklus.
+        </p>
+
+        <div class="hero-actions" style="margin-top: 2rem;">
+          <a href="/priklady.html" class="btn btn-primary">Ďalšie príklady</a>
+          <a href="https://docs.activity.sportup.sk/features/mentoring" class="btn btn-secondary" target="_blank" rel="noopener">
+            Technické detaily v dokumentácii ↗
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="/script.js"></script>
+</body>
+</html>

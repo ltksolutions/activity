@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre koho · activity</title>
+  <meta name="description" content="Cieľové skupiny: športovec, tréner, rozhodca, lekár, fanúšik, podporovateľ. Každá vidí to, čo jej patrí." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Preskočiť na obsah</a>
+  <header id="site-header" class="site-header"></header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container-narrow">
+        <h1>Pre koho je activity</h1>
+        <p class="lead">
+          Jednu platformu používa viac kategórií ľudí. Každá vidí to, čo jej patrí — a nič navyše.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="sportovci" class="anchor-target">🏃 Športovci</h2>
+        <p>
+          Od detského športu cez amatérsku úroveň, polo-profesionálov, až po profesionálov a reprezentantov.
+          Každá kategória má svoj adekvátny rozsah funkcií.
+        </p>
+        <h3>Detský šport (do 16 rokov)</h3>
+        <p>
+          Dieťa nemá vlastný účet. Tréner zaznamenáva tréningy, zápasy a hodnotenia. Lekár vedie zdravotné
+          záznamy. Komunikácia ide cez <strong>rodiča-proxy</strong> — viď <a href="/courier.html">Komunikácia</a>.
+        </p>
+        <h3>Mládežnícky šport (16–18 rokov)</h3>
+        <p>
+          Dieťa získava vlastný účet po dosiahnutí prahu (parametrizovateľné per klub).
+          Rodič si zachová read-only prístup k zdravotným a citlivým záznamom do 18. roku.
+        </p>
+        <h3>Amatérsky a polo-profesionálny šport</h3>
+        <p>
+          Plný účet, vedenie tréningov, hodnotenia, mentoring (ak je prístupný), klubové komunity.
+        </p>
+        <h3>Profesionálny šport</h3>
+        <p>
+          Plný účet plus moduly špecifické pre profesionálov: antidopingový pool a whereabouts,
+          sponzorské zmluvy, reprezentačné nominácie.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/workflows/athlete" target="_blank" rel="noopener" class="btn-link">
+            Detail workflow športovca v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="treneri" class="anchor-target">🎯 Tréneri</h2>
+        <p>
+          Tréner v aplikácii spravuje tím, plánuje tréningy, hodnotí zverencov, komunikuje s rodičmi.
+          Pri kontinuálnom vzdelávaní si zaznamenáva kredity pre obnovu licencie.
+        </p>
+        <h3>Hlavné aktivity trénera</h3>
+        <ul>
+          <li><strong>Tréning</strong> — plán, účasť hráčov, intenzita, drilly</li>
+          <li><strong>Hodnotenie športovca</strong> — pravidelné štruktúrované hodnotenia každého hráča</li>
+          <li><strong>Účasť na zápase</strong> — striedanie, taktické zmeny, výsledok</li>
+          <li><strong>Vzdelávanie</strong> — semináre, certifikácie, lektorovanie</li>
+        </ul>
+        <h3>Komunikácia trénera</h3>
+        <p>
+          Tímová group konverzácia, individuálny chat s hráčom (alebo rodičom-proxy), realizačný tím
+          klubu.
+        </p>
+        <h3>Čo tréner NEvidí</h3>
+        <p>
+          Lekárske záznamy svojich hráčov. To je striktné — zdravotné info nie je doménou trénera.
+          Pri zranení dostane informáciu od lekára <em>"Adam má zákaz tréningu 2 týždne"</em>, ale
+          detail diagnózy nie.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="rozhodcovia" class="anchor-target">🏁 Rozhodcovia</h2>
+        <p>
+          Rozhodcovia sú v slovenskom športe najprepracovanejšia kategória v aplikácii — pretože
+          mentoringový systém je primárne navrhnutý pre nich.
+        </p>
+        <h3>Životný cyklus rozhodcu</h3>
+        <p>
+          Po základnom vzdelávaní získava licenciu úrovne IV. Pri postupe na vyššiu úroveň prebieha
+          mentoring s priradením skúseného mentora. Pri kandidatúre na UEFA listinu sa do cyklu
+          pridáva externý UEFA mentor (ľahká identita).
+        </p>
+        <h3>Ako vyzerá kariéra v aplikácii</h3>
+        <p>
+          Tomáš (mladý rozhodca) v aplikácii vidí: aktívny mentoring cyklus, najbližšie nominácie
+          na zápasy, hodnotenia od delegátov, vzdelávacie kredity, postup k vyššej licencii.
+        </p>
+        <p>
+          Predseda komisie SFZ vidí všetkých svojich rozhodcov, ich postup, problematické prípady
+          (zlé hodnotenia, vekové limity), aktívne mentoring cykly.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="/mentoring.html" class="btn btn-primary">Detail mentoringu</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="medical" class="anchor-target">⚕️ Lekári, fyzio, mentálny kouč</h2>
+        <p>
+          Najprísnejšia ACL v systéme. Lekár vedie záznamy o zdravotnom stave športovca, ktoré vidí
+          <strong>iba</strong> on, klubový lekár, fyzio (s prepojeným ošetrením), samotný športovec a
+          rodič maloletého.
+        </p>
+        <h3>Súkromné poznámky odborníka</h3>
+        <p>
+          Mentálny kouč má (podobne ako mentor) možnosť <strong>súkromnej poznámky</strong> — pole,
+          ktoré <em>subjekt nikdy nevidí</em>. Toto je dôležité pre profesionálnu prácu — preliminárne
+          hypotézy o psychickom stave nepatria pred uší pacienta.
+        </p>
+        <h3>Realizačný tím</h3>
+        <p>
+          Pri profesionálnych športovcoch je realizačný tím (tréner + lekár + fyzio + mentálny kouč
+          + výživár) v jednej group konverzácii. Slúži pre koordináciu — žiadne detailné zdravotné
+          info sa tam neuvádza, len <em>"Adam je 2 týždne mimo tréningu"</em>.
+        </p>
+        <h3>Antidoping</h3>
+        <p>
+          Profesionáli v testovacom poole majú v aplikácii whereabouts evidenciu, TUE žiadosti
+          (Therapeutic Use Exemption), výsledky testov.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/workflows/medical" target="_blank" rel="noopener" class="btn-link">
+            Detail medical workflow v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="fanusici" class="anchor-target">📣 Fanúšikovia</h2>
+        <p>
+          Najmenej regulovaná, ale najpočetnejšia kategória. Fanúšik môže byť anonymný návštevník
+          (verejný obsah), registrovaný používateľ (komentáre, hlasovania, sledovanie),
+          alebo člen fanklubu (klubové broadcasty, výjazdy, interná komunita).
+        </p>
+        <h3>Čo fanúšik môže</h3>
+        <ul>
+          <li>Sledovať kluby a športovcov, dostávať klubové broadcasty</li>
+          <li>Hlasovať <em>"Hráč zápasu"</em>, predikcie výsledkov, zaznamenať návštevu zápasu</li>
+          <li>Komentovať verejné aktivity (zápasy, hlasovania, news)</li>
+          <li>Diskutovať vo fanklubovej group konverzácii</li>
+        </ul>
+        <h3>Čo fanúšik NEmôže</h3>
+        <p>
+          Iniciovať direct chat s profesionálom (kým profesionál sám neotvorí DM). Vidieť lekárske,
+          mentoringové, antidopingové záznamy. Vidieť hodnotenia od trénerov.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;" id="podporovatelia" class="anchor-target">💰 Podporovatelia</h2>
+        <p>
+          Kategória pre tých, ktorí finančne alebo materiálne prispievajú do slovenského športu.
+          Fyzická aj právnická osoba.
+        </p>
+        <h3>Typy podpory</h3>
+        <ul>
+          <li><strong>Sponzor (firma)</strong> — zmluvný vzťah, brand visibility, sponzorské aktivácie</li>
+          <li><strong>Mecenáš (jednotlivec)</strong> — pravidelná long-term podpora bez zmluvy</li>
+          <li><strong>Rodič ako podporovateľ</strong> — financovanie kariéry vlastného dieťaťa</li>
+          <li><strong>Darca 2 % z dane</strong> — jednorazový alebo opakovaný transfer</li>
+          <li><strong>Crowdfunding prispievateľ</strong> — menšie príspevky cez kampane</li>
+        </ul>
+        <h3>Komunikácia s podporovaným</h3>
+        <p>
+          Podporovateľ <strong>nemá</strong> direct prístup ku športovcovi — komunikácia ide cez klub
+          ako sprostredkovateľa. Toto chráni proti zneužitiu vzťahu.
+        </p>
+        <h3>Reporty a transparency</h3>
+        <p>
+          Sponzor vidí, na čo bol jeho dar použitý (reporty od recipienta), engagement metriky pri
+          aktiváciách, daňové potvrdenia.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Jeden účet, viac rolí</h2>
+        <p>
+          Bežne je človek viac ako jedna rola naraz. Bývalý rozhodca môže byť teraz <em>mentor</em>
+          mladého rozhodcu, súčasne <em>fanúšik</em> obľúbeného klubu, súčasne <em>rodič</em> dieťaťa
+          v U13. Tri roly, jeden Person účet.
+        </p>
+        <p>
+          Aplikácia v každej role zobrazuje iba relevantné funkcie. V profile sa dá medzi rolami
+          prepínať podľa kontextu.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="/script.js"></script>
+</body>
+</html>

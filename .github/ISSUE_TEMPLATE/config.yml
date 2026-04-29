@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Otázka alebo diskusia
+    url: https://github.com/ltksolutions/activity/discussions
+    about: Pre otázky a diskusie použij GitHub Discussions, nie issues.

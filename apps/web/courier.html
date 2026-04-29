@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Komunikácia · activity</title>
+  <meta name="description" content="Šifrovaný 1:1 chat, tímové skupiny, klubové broadcasty. Rodič ako zástupca dieťaťa pri tímovej komunikácii." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Preskočiť na obsah</a>
+  <header id="site-header" class="site-header"></header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container-narrow">
+        <h1>Komunikácia</h1>
+        <p class="lead">
+          Mentor s mentee, tréner s tímom, klub s rodičmi, zväz s licencovanými rozhodcami.
+          Jeden komunikačný subsystém pre všetky kontexty — s privacy a moderáciou tam, kde to dáva zmysel.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Tri typy konverzácií</h2>
+        <p>
+          activity má v komunikačnom subsystéme tri rôzne typy konverzácií. Líšia sa
+          počtom účastníkov, šifrovaním a moderáciou.
+        </p>
+
+        <h3>Direct (1:1)</h3>
+        <p>
+          Chat medzi dvomi ľuďmi. <strong>End-to-end šifrované</strong> — server vidí len ciphertext.
+          Tretí účastník sa nedá pridať (na to vznikne nová group).
+        </p>
+        <p><em>Príklad:</em> Mentor ↔ mentee. Tréner ↔ rodič. Lekár ↔ pacient.</p>
+
+        <h3>Group (3+)</h3>
+        <p>
+          Skupinový chat 3 a viac ľudí. Server-side šifrovaný (admin vie moderovať).
+          Voliteľne admin / moderátor.
+        </p>
+        <p><em>Príklad:</em> Tímový chat U13. Realizačný tím okolo profesionálneho hráča. Komisia rozhodcov.</p>
+
+        <h3>Broadcast</h3>
+        <p>
+          Málo publisherov, veľa subscriberov. Subscriberi čítajú, prípadne reagujú v komentároch.
+        </p>
+        <p><em>Príklad:</em> Klubové oznamy → fanklub. Zväz → licencovaní rozhodcovia. Media manager → fanúšikovia.</p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container">
+        <h2 style="margin-top: 0;">Príklad: tímový chat U13</h2>
+        <p>
+          Klubový tím U13 má svoju group konverzáciu. Účastníci: tréner, asistent, klubový manažér,
+          a <strong>rodičia</strong> každého hráča (deti pod 16 rokov nemajú vlastný účet).
+        </p>
+
+        <div class="mockup">
+          <div class="mockup-bar">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <span>activity.sportup.sk · ŠK Slovan U13 — 12 členov</span>
+          </div>
+          <div class="mockup-content">
+            <div class="mock-chat-header">
+              <div class="mock-avatar">U13</div>
+              <div>
+                <div class="mock-chat-name">ŠK Slovan U13 — Oznamy</div>
+                <div class="mock-chat-meta">12 členov · tréner Marta Kováčová</div>
+              </div>
+            </div>
+
+            <div class="mock-message">
+              <div class="mock-avatar" style="background: #fef3c7; color: #b45309;">PN</div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 2px;">
+                  Peter Novák <span class="mock-proxy-tag">rodič Adamka</span>
+                </div>
+                <div class="mock-bubble">Adamko bude v stredu chýbať, je chorý.</div>
+                <div class="mock-message-time">14:23</div>
+              </div>
+            </div>
+
+            <div class="mock-message">
+              <div class="mock-avatar" style="background: var(--color-accent-light); color: var(--color-accent-dark);">MK</div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 2px;">
+                  Marta Kováčová <span class="mock-proxy-tag" style="background: var(--color-accent-light); color: var(--color-accent-dark);">tréner</span>
+                </div>
+                <div class="mock-bubble">Vďaka za info, prajem skoré uzdravenie.</div>
+                <div class="mock-message-time">14:25</div>
+              </div>
+            </div>
+
+            <div class="mock-message">
+              <div class="mock-avatar" style="background: var(--color-accent-light); color: var(--color-accent-dark);">MK</div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 2px;">
+                  Marta Kováčová <span class="mock-proxy-tag" style="background: var(--color-accent-light); color: var(--color-accent-dark);">tréner</span>
+                </div>
+                <div class="mock-bubble">
+                  Dôležité: tréning v sobotu posunutý z 9:00 na 10:00 (prenájom haly).
+                  Detail v kalendári klubu.
+                </div>
+                <div class="mock-message-time">včera</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p>
+          Vidíš tagy <em>"rodič Adamka"</em> pri Petrovi a <em>"tréner"</em> pri Marte —
+          systém ti hovorí, <strong>v akom kontexte</strong> daný človek vystupuje. Peter
+          je v chate ako zástupca svojho syna, nie sám za seba.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Rodič ako zástupca dieťaťa</h2>
+        <p>
+          Pri detskom športe je rodič kľúčový aktér. Dieťa do určitého veku (default 16, parametrizovateľné
+          per klub) <strong>nemá vlastný účet</strong>. Komunikuje za neho rodič.
+        </p>
+        <p>
+          V tímovom chate U13 vidíš Petra ako <em>"Peter Novák (rodič Adamka)"</em>. To znamená:
+        </p>
+        <ul>
+          <li>Peter môže písať <strong>v mene Adamka</strong> — napríklad ospravedlnenia z tréningu</li>
+          <li>Peter <strong>nevystupuje sám za seba</strong> v tomto chate</li>
+          <li>Ak má Peter dvoch synov v tom istom tíme, je v chate <strong>dvakrát</strong> — raz ako zástupca Adamka, raz Janka</li>
+          <li>V deň 18. narodenín Adamka Peter <strong>stráca</strong> proxy účastníctvo (s 30-dňovým grace period)</li>
+        </ul>
+        <p>
+          Špeciálny prípad: <strong>dieťa má vlastný direct chat s lekárom alebo mentorom</strong>
+          po dosiahnutí 16. roku. Peter v tomto prípade vidí konverzáciu read-only (privacy gate)
+          až do plnoletosti dieťaťa. Dieťa o tom vie — UI ukazuje *"Rodič číta tieto konverzácie"*.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/features/parental-proxy" target="_blank" rel="noopener" class="btn-link">
+            Detail rodičovského proxy v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Šifrovanie a privacy</h2>
+
+        <h3>End-to-end pre 1:1</h3>
+        <p>
+          Direct chat medzi dvomi ľuďmi je end-to-end šifrovaný. Server vidí len ciphertext.
+          Ani my, ani admin organizácie nedokážu prečítať obsah.
+        </p>
+        <p>
+          Pri direct chate dieťa ↔ odborník po 16. roku vzniká problém — rodič musí mať read access.
+          Riešenie: trojhľadový kľúč (dieťa, odborník, rodičia). Implementačne to nie je čisto E2E,
+          ale server stále nedokáže dešifrovať.
+        </p>
+
+        <h3>Server-side encryption pre group</h3>
+        <p>
+          Skupinové konverzácie sú šifrované pri uložení (encryption at rest), ale admin organizácie
+          k nim má prístup pre účely moderácie. Pri pridaní nového člena do skupiny môže nový člen
+          čítať <strong>len správy od jeho pridania ďalej</strong> — historické správy nie.
+        </p>
+
+        <h3>Retencia</h3>
+        <p>
+          Konverzácie nemajú nekonečnú životnosť. Štandardne 365 dní (organizácia si to vie zmeniť).
+          Po vypršaní sa správy fyzicky mažú; metadáta konverzácie zostávajú pre audit. Pri mentoringových
+          konverzáciách sa odporúča predĺžiť retenciu, aby pretrvali rovnako ako záverečné hodnotenie cyklu.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Most do aktivít</h2>
+        <p>
+          Kedykoľvek si dvaja ľudia píšu v Courieri, môžu z časti diskusie urobiť <strong>aktivitu</strong>.
+          Mentor v chate s mentee označí rozsah správ a klikne <em>"Vytvoriť mentoringové sedenie"</em>.
+          Klubový lekár v chate s pacientom označí symptómy a klikne <em>"Pridať lekársky záznam"</em>.
+        </p>
+        <p>
+          V detaile vytvorenej aktivity je read-only embed s prepojeným rozsahom správ.
+          Diskusia sa nestráca — len získava formálnejšiu štruktúru.
+        </p>
+
+        <p style="margin-top: 2rem;">
+          <a href="https://docs.activity.sportup.sk/features/courier" target="_blank" rel="noopener" class="btn-link">
+            Detail Courier subsystému v dokumentácii ↗
+          </a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="/script.js"></script>
+</body>
+</html>

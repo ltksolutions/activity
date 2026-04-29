@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prepojenie s sportup.sk · activity</title>
+  <meta name="description" content="activity je klient projektu sportup.sk — využíva jeho registre osôb a organizácií. Detail integrácie." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Preskočiť na obsah</a>
+  <header id="site-header" class="site-header"></header>
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="container-narrow">
+        <h1>Prepojenie s sportup.sk</h1>
+        <p class="lead">
+          activity nie je samostatný projekt. Je to <strong>klient širšieho ekosystému sportup.sk</strong>,
+          ktorý mu poskytuje autoritatívne registre osôb a organizácií.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Dva projekty, jasné rozdelenie</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Projekt</th>
+              <th>Doména</th>
+              <th>Zodpovednosť</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>sportup.sk</strong><br />
+                <em style="font-size: 0.85rem;">nadradený projekt</em>
+              </td>
+              <td><code>sportup.sk</code></td>
+              <td>
+                <strong>Kto je kto</strong> v slovenskom športe — fyzické a právnické osoby,
+                oficiálne číselníky (športy, regióny, kategórie), organizačná štruktúra
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>activity</strong><br />
+                <em style="font-size: 0.85rem;">tento projekt</em>
+              </td>
+              <td><code>activity.sportup.sk</code></td>
+              <td>
+                <strong>Čo sa s nimi deje</strong> — aktivity, mentoring, komunikácia,
+                fanúšikovské funkcie
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          Toto rozdelenie zodpovedností je zámerné. <em>"Kto je kto"</em> je relatívne stabilná oblasť —
+          osoba sa narodí, registruje, niekde pracuje, prípadne mení rolu pri postupe. <em>"Čo sa deje"</em>
+          je vysoko frekventovaná oblasť — tréningy denne, zápasy týždenne, komunikácia neustále.
+          Iný typ záťaže, iné DB query patterns, iné indexy.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Ako to funguje technicky</h2>
+        <p>
+          activity <strong>neduplikuje</strong> identitné dáta. Keď chce zobraziť meno športovca,
+          dáta prichádzajú zo sportup.sk cez API integráciu. Lokálne držíme len malú cache
+          (mirror) pre rýchle čítanie.
+        </p>
+
+        <h3>Hybridné master pre Person</h3>
+        <p>
+          Niektoré polia sú master-ované sportup.sk projektom (rodné číslo, oficiálne meno),
+          niektoré lokálne v activity (preferovaný jazyk UI, vlastné role, history aktivít).
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Pole</th>
+              <th>Master</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Meno, priezvisko, dátum narodenia</td>
+              <td><code>sportup.sk</code></td>
+            </tr>
+            <tr>
+              <td>Rodné číslo, národnosť</td>
+              <td><code>sportup.sk</code></td>
+            </tr>
+            <tr>
+              <td>Oficiálny email (registrácia)</td>
+              <td><code>sportup.sk</code></td>
+            </tr>
+            <tr>
+              <td>Preferovaný email (pracovný)</td>
+              <td><code>activity</code></td>
+            </tr>
+            <tr>
+              <td>Preferovaný jazyk UI</td>
+              <td><code>activity</code></td>
+            </tr>
+            <tr>
+              <td>Aktivitná história</td>
+              <td><code>activity</code></td>
+            </tr>
+            <tr>
+              <td>Aktívne mentoring cykly</td>
+              <td><code>activity</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Synchronizácia v praxi</h2>
+
+        <h3>Smer sportup.sk → activity</h3>
+        <p>
+          Keď v sportup.sk niekto zmení údaj osoby (napríklad zmena priezviska po sobáši),
+          activity sa o tom dozvie cez:
+        </p>
+        <ul>
+          <li><strong>Real-time webhook</strong> — sportup.sk pošle notifikáciu activity, ktorá hneď updatne lokálnu kópiu</li>
+          <li><strong>Nightly reconcile</strong> — pre prípad zmeškaného webhook-u, denný cron job kontroluje zmeny</li>
+        </ul>
+
+        <h3>Smer activity → sportup.sk</h3>
+        <p>
+          Keď používateľ v activity zmení identitný atribút (napríklad nahláši zmenu priezviska),
+          activity to neukladá rovno. Vytvorí <strong>návrh zmeny</strong> (proposal), ktorý prejde
+          schvaľovacím procesom a pošle sa do sportup.sk. Po ich akceptácii webhook donesie zmenu
+          späť do activity.
+        </p>
+        <p>
+          Pre čisto aplikačné polia (preferovaný jazyk, custom voľby) žiadny proposal nie je potrebný —
+          píšeme rovno do nášho lokálneho záznamu.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Číselníky</h2>
+        <p>
+          Číselníky (športy, regióny, kategórie športovcov, ligy) sú primárne master-ované sportup.sk
+          projektom. activity ich periodicky synchronizuje.
+        </p>
+        <p>
+          Niektoré číselníky <strong>existujú iba v activity</strong> — sú špecifické pre náš projekt:
+        </p>
+        <ul>
+          <li><code>mentoring_session_topic</code> — témy mentoringového sedenia</li>
+          <li><code>referee_competencies</code> — kompetenčné tagy rozhodcu (z UEFA observer report)</li>
+          <li><code>coach_competencies</code>, <code>physio_competencies</code>, ...</li>
+        </ul>
+        <p>
+          Tieto sa do sportup.sk nesynchronizujú. Sú lokálne pre activity.
+        </p>
+
+        <h3>Custom hodnoty per organizácia</h3>
+        <p>
+          Niektoré organizácie môžu chcieť pridať vlastné kompetenčné tagy. Pre to existuje flag
+          <code>isCustom</code> na hodnotách číselníka — izolované per tenant, nesynchronizované.
+        </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Otvorené API a rozšírenia</h2>
+        <p>
+          Niektoré API funkcie, ktoré activity potrebuje, ešte v sportup.sk projekte nie sú implementované.
+          Poskytneme ich ako pull requesty:
+        </p>
+        <ul>
+          <li>Webhook notifikácie pri zmene osoby alebo organizácie</li>
+          <li>Incremental sync (parameter <code>changedSince</code> na list endpointoch)</li>
+          <li>Bulk export endpoint pre initial backfill</li>
+          <li>HMAC podpisovanie webhookov</li>
+        </ul>
+        <p>
+          Sú to štandardné API praktiky, nie naše tajomstvá — preto ich rovno prinesieme
+          do open-source repa <a href="https://github.com/ltksolutions/sportup.sk" target="_blank" rel="noopener">ltksolutions/sportup.sk</a>.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-alt">
+      <div class="container-narrow">
+        <h2 style="margin-top: 0;">Detail v dokumentácii</h2>
+        <p>
+          Toto je marketingový prehľad. Pre vývojárov, ktorí stavajú integráciu, je
+          v dokumentácii detailný popis:
+        </p>
+        <div class="hero-actions" style="justify-content: flex-start;">
+          <a href="https://docs.activity.sportup.sk/sportup-sk-integration" target="_blank" rel="noopener" class="btn btn-primary">
+            Detail integrácie ↗
+          </a>
+          <a href="https://docs.activity.sportup.sk/architecture" target="_blank" rel="noopener" class="btn btn-secondary">
+            Architektúra ↗
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="/script.js"></script>
+</body>
+</html>

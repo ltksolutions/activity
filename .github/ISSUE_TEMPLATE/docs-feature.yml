@@ -1,0 +1,69 @@
+name: 📝 Návrh nového dokumentu / sekcie
+description: Navrhni nový dokument, sekciu alebo rozšírenie dokumentácie
+labels: ["docs:feature"]
+title: "[docs:feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vďaka, že navrhuješ rozšírenie dokumentácie. Opíš, čo navrhuješ a prečo.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Typ návrhu
+      options:
+        - Nový dokument v existujúcej sekcii
+        - Nová sekcia
+        - Rozšírenie existujúceho dokumentu
+        - Refaktor / reorganizácia
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Kde má patriť?
+      description: Predpokladaný priečinok / cesta v `apps/docs/pages/`
+      placeholder: apps/docs/pages/features/incident-management.mdx
+    validations:
+      required: false
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivácia
+      description: Aký problém / medzeru v dokumentácii to rieši?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outline
+    attributes:
+      label: Návrh obsahu
+      description: Outline kapitol / hlavných tém, ktoré by mal dokument pokryť.
+      placeholder: |
+        - Doménový kontext
+        - Hlavné koncepty
+        - Workflow
+        - ACL
+        - ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Súvisiace dokumenty
+      description: Existujúce dokumenty, na ktoré sa to viaže.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Chcel by si na tom pracovať?
+      options:
+        - label: Áno, urobím PR sám
+        - label: Áno, ale potrebujem pomoc
+        - label: Nie, len navrhujem — niekto iný môže

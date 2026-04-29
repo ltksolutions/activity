@@ -21,9 +21,10 @@ Detaily integrácie v [Integrácia s sportup.sk](https://docs.activity.sportup.s
 
 Aktuálne hotové:
 
+- ✅ **Marketing web** ([activity.sportup.sk](https://activity.sportup.sk)) — statický web s prehľadom projektu
 - ✅ **Dokumentácia** — kompletný technický a produktový popis systému ([docs.activity.sportup.sk](https://docs.activity.sportup.sk))
 - ⏳ Backend (MCP servery) — TBD
-- ⏳ Web aplikácia ([activity.sportup.sk](https://activity.sportup.sk)) — TBD
+- ⏳ Web aplikácia ([app.activity.sportup.sk](https://app.activity.sportup.sk)) — TBD
 - ⏳ Admin aplikácia ([admin.activity.sportup.sk](https://admin.activity.sportup.sk)) — TBD
 - ⏳ Zdielané schémy package — TBD
 
@@ -32,8 +33,9 @@ Aktuálne hotové:
 ```
 activity/
 ├── apps/
-│   ├── docs/                ← Vývojárska dokumentácia (Nextra, docs.activity.sportup.sk)
-│   ├── platform-web/        ← (TBD) Web aplikácia (activity.sportup.sk)
+│   ├── web/                 ← Marketing web (activity.sportup.sk) — statický HTML
+│   ├── docs/                ← Vývojárska dokumentácia (docs.activity.sportup.sk, Nextra)
+│   ├── platform-web/        ← (TBD) Web aplikácia (app.activity.sportup.sk)
 │   ├── platform-admin/      ← (TBD) Admin aplikácia (admin.activity.sportup.sk)
 │   ├── registry-mcp/        ← (TBD) MCP server: lokálny mirror sportup.sk + naše rozšírenia
 │   ├── activity-mcp/        ← (TBD) MCP server: aktivity, mentoring, komentáre
@@ -57,16 +59,20 @@ activity/
 
 📝 Pozri [CONTRIBUTING.md](./CONTRIBUTING.md) — pokyny pre prispievateľov.
 
-### Pre lokálny development dokumentácie
+### Pre lokálny development
 
 ```bash
 git clone https://github.com/ltksolutions/activity.git
 cd activity
 npm install
-npm run dev:docs
 ```
 
-Otvor [http://localhost:3000](http://localhost:3000).
+Spustenie konkrétnej aplikácie:
+
+```bash
+npm run dev:docs    # Dokumentácia (Nextra) na http://localhost:3000
+npm run dev:web     # Marketing web (statický) na http://localhost:8080
+```
 
 ## Technologický stack
 
@@ -86,21 +92,28 @@ Detail v [Architektúra](https://docs.activity.sportup.sk/architecture) sekcii d
 
 ## Deployment
 
+### apps/web → activity.sportup.sk
+
+Vercel projekt (statický web bez frameworku):
+
+- **Framework Preset:** Other
+- **Root Directory:** `apps/web`
+- **Build Command:** *(prázdne)*
+- **Output Directory:** `.`
+
+DNS: `activity.sportup.sk CNAME cname.vercel-dns.com`
+
 ### apps/docs → docs.activity.sportup.sk
 
 Vercel projekt napojený na tento repo:
 
-- **Framework preset:** Next.js
-- **Root directory:** `apps/docs`
-- **Build command:** `npm run build`
-- **Output directory:** `.next`
-- **Install command:** `npm install` (z root-u, monorepo)
+- **Framework Preset:** Next.js
+- **Root Directory:** `apps/docs`
+- **Build Command:** `npm run build`
+- **Output Directory:** `.next`
+- **Install Command:** `npm install` (z root-u, monorepo)
 
-Custom doména `docs.activity.sportup.sk` nakonfigurovaná v Vercel:
-
-```
-docs.activity.sportup.sk  CNAME  cname.vercel-dns.com
-```
+DNS: `docs.activity.sportup.sk CNAME cname.vercel-dns.com`
 
 ### Ostatné apps
 

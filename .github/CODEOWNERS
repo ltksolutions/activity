@@ -1,0 +1,84 @@
+# CODEOWNERS — kto má review právo na ktorú časť repozitára.
+#
+# Syntax: <path>  <@owner1> <@owner2> ...
+# Pozri: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# DOPLNIŤ pri inicializácii repozitára — nahraď <@username> reálnymi GitHub usernamy.
+
+# Default — niekto musí review-ovať všetko, čo nie je explicitne pokryté nižšie
+*                                            @<placeholder>
+
+# ─────────────────────────────────────────
+# Dokumentácia (apps/docs)
+# ─────────────────────────────────────────
+
+# Top-level dokumenty (overview, architecture, ...)
+/apps/docs/pages/overview.mdx                @<placeholder>
+/apps/docs/pages/architecture.mdx            @<placeholder>
+/apps/docs/pages/domain-model.mdx            @<placeholder>
+/apps/docs/pages/mcp-servers.mdx             @<placeholder>
+/apps/docs/pages/sportup-sk-integration.mdx     @<placeholder>
+/apps/docs/pages/glossary.mdx                @<placeholder>
+/apps/docs/pages/index.mdx                   @<placeholder>
+
+# Featurové dokumenty
+/apps/docs/pages/features/mentoring.mdx           @<placeholder>
+/apps/docs/pages/features/courier.mdx             @<placeholder>
+/apps/docs/pages/features/activity-comments.mdx   @<placeholder>
+/apps/docs/pages/features/parental-proxy.mdx      @<placeholder>
+
+# Workflow per kategória používateľa
+/apps/docs/pages/workflows/athlete.mdx       @<placeholder>
+/apps/docs/pages/workflows/coach.mdx         @<placeholder>
+/apps/docs/pages/workflows/referee.mdx       @<placeholder>
+/apps/docs/pages/workflows/medical.mdx       @<placeholder>
+/apps/docs/pages/workflows/fan.mdx           @<placeholder>
+/apps/docs/pages/workflows/supporter.mdx     @<placeholder>
+
+# ACL matice
+/apps/docs/pages/acl/                        @<placeholder>
+
+# Operácie a infraštruktúra
+/apps/docs/pages/ops/                        @<placeholder>
+
+# UI dokumenty
+/apps/docs/pages/ui/                         @<placeholder>
+
+# Konfigurácia Nextra a deployment
+/apps/docs/theme.config.tsx                  @<placeholder>
+/apps/docs/next.config.mjs                   @<placeholder>
+/apps/docs/package.json                      @<placeholder>
+/apps/docs/README.md                         @<placeholder>
+
+# ─────────────────────────────────────────
+# Marketing web (apps/web)
+# ─────────────────────────────────────────
+
+/apps/web/                                   @<placeholder>
+/apps/web/styles.css                         @<placeholder>
+/apps/web/script.js                          @<placeholder>
+/apps/web/partials/                          @<placeholder>
+/apps/web/*.html                             @<placeholder>
+
+# ─────────────────────────────────────────
+# Budúce apps (zatiaľ TBD)
+# ─────────────────────────────────────────
+
+# /apps/web/                                 @<placeholder>
+# /apps/admin/                               @<placeholder>
+# /apps/registry-mcp/                         @<placeholder>
+# /apps/activity-mcp/                        @<placeholder>
+# /apps/courier-mcp/                         @<placeholder>
+
+# /packages/schemas/                         @<placeholder>
+
+# ─────────────────────────────────────────
+# Repo-level configy
+# ─────────────────────────────────────────
+
+# Toto je dôležité — meniť opatrne, vyžaduje schválenie viacerých
+/.github/                                    @<placeholder>
+/package.json                                @<placeholder>
+/CONTRIBUTING.md                             @<placeholder>
+/README.md                                   @<placeholder>
+/LICENSE                                     @<placeholder>

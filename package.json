@@ -10,6 +10,7 @@
   "scripts": {
     "dev:docs": "npm run dev --workspace=@activity/docs",
     "build:docs": "npm run build --workspace=@activity/docs",
+    "dev:web": "cd apps/web && npx serve . -p 8080",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
