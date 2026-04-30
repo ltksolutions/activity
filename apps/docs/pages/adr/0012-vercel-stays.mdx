@@ -1,0 +1,82 @@
+# ADR-012 · Vercel zostáva (žiadny Google Cloud)
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-28
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-004](0004-frontend-stack), [Q-001](../../../../OPEN_QUESTIONS.md), [Q-002](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+V priebehu návrhu sa otvorila otázka: *"nemali by sme presunúť celú infraštruktúru na Google Cloud (GCP) a využiť ich služby (Cloud Run, Firestore, Pub/Sub, Identity Platform, atď.)?"*
+
+Argumenty pre GCP boli:
+
+- **Jednotnosť** — všetko v jednej cloud rodine, jeden billing, jedno IAM
+- **Slovenské orgány a GDPR** — GCP má EU regióny, je verifikovaný
+- **Niektoré služby výborné** — Cloud Run, BigQuery
+
+Argumenty proti boli:
+
+- **Vercel je už nasadený** — `activity.sportup.sk` a `docs.activity.sportup.sk` bežia
+- **Next.js + Vercel = first-party** — každá feature funguje, deployment je trivialitou
+- **Vendor migration mid-design** — meniť deployment target keď ešte nemáme produkčný kód = predčasné
+
+## Rozhodnutie
+
+**Zostávame na Vercel** pre Next.js aplikácie (`web`, `docs`, neskôr `platform-web`, `platform-admin`).
+
+Backend (3 MCP servery, Redis, MongoDB) **môžu** byť na inom poskytovateľovi — to nie je rozhodnuté tu, je to v [Q-001 až Q-006](../../../../OPEN_QUESTIONS.md).
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Migrácia frontendu na GCP** (Cloud Run pre Next.js) — Pros: jednotnosť. Cons: stratíme Vercel-specific features (preview deployments, ISR, edge runtime), Next.js na Cloud Run vyžaduje custom Docker image a manual ops, deployment sa skomplikuje.
+- **(B) Migrácia úplne všetkého na GCP** (Cloud Run + Firestore + Identity Platform) — Pros: jednotnosť, single bill. Cons: Firestore je iný model než MongoDB, znamenalo by rewrite doménového modelu (viď [ADR-001](0001-database-mongodb)), Identity Platform má lock-in.
+- **(C) Vercel zostáva pre frontend, backend slobodne** ✅ — pragmatický kompromis. Frontend = Vercel (kde už beží), backend = vyhodnotíme zvlášť.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Žiadna migrácia mid-development** — všetko aktuálne fungujúce zostáva
+- **Vercel features využijeme naplno** — preview deploys per PR, Edge Functions ak treba, automatic image optimization
+- **Backend flexibilita** — môžeme zvoliť optimálny backend stack zvlášť (AWS, GCP, Azure, alebo Cloudflare Workers, podľa najlepších ceniek)
+
+### Negatíva
+
+- **Multi-cloud** — frontend na Vercel, backend možno na inej cloud → dva billing accounts, dve IAM, networking medzi nimi (cross-cloud volania)
+- **Vendor lock-in pre frontend** — Next.js síce open-source, ale Vercel-specific features (ISR, edge) by sme stratili pri migrácii
+- **DDoS protection roztrieštená** — Vercel má vlastné, backend cloud má svoje
+
+### Riziká
+
+- **Vercel cena pri raste** — pri vysokom traffic-u môže ísť cena hore. **Mitigácia:** monitorovať bandwidth a invocations, pri probléme prejsť na `open-next` self-hosted (na AWS) — to je menej práce ako úplný rewrite.
+- **Cross-cloud latency** — keď frontend (Vercel, US/EU) volá backend (napr. GCP eu-central) → 50-100ms latency navyše. **Mitigácia:** Vercel Edge Functions ako proxy, ktorý je fyzicky bližšie k backendu.
+
+## Implementačné poznámky
+
+Aktuálne na Vercel:
+
+| Projekt | Doména | Status |
+|---|---|---|
+| `apps/web` | activity.sportup.sk | ✅ Live |
+| `apps/docs` | docs.activity.sportup.sk | ✅ Live |
+
+Plánované na Vercel:
+
+- `apps/platform-web` → `app.activity.sportup.sk`
+- `apps/platform-admin` → `admin.activity.sportup.sk`
+
+Backend (TBD, iný cloud):
+
+- `registry-mcp.activity.sportup.sk`
+- `activity-mcp.activity.sportup.sk`
+- `courier-mcp.activity.sportup.sk`
+- `api.activity.sportup.sk` (REST gateway)
+- `auth.activity.sportup.sk` (OIDC)
+
+Cross-cloud routing: všetko ide cez DNS na úrovni `activity.sportup.sk`, klient nevie, kde čo je hostené.
+
+## Otvorené otázky
+
+- **Backend cloud** — AWS / GCP / iný? Viď [Q-001](../../../../OPEN_QUESTIONS.md) až [Q-006](../../../../OPEN_QUESTIONS.md).
+- **Vercel Pro vs Enterprise** — pri raste môže byť potrebné upgrade pre vyššie limity.

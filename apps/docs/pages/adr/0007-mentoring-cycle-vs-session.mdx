@@ -1,0 +1,100 @@
+# ADR-007 · MentoringCycle ako kontainer, MentoringSession ako aktivita
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-006](0006-polymorphic-comments), [Q-015](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Pri modelovaní mentoringu sme zvažovali, **ako rozdeliť dlhodobý mentor-mentee vzťah** od jednotlivých sedení. Doménová realita:
+
+- Mentor a mentee majú **dlhodobý vzťah** (mesiace až roky)
+- V rámci tohto vzťahu majú **konkrétne sedenia** (30-120 minút)
+- Vzťah má **fázy**: aktívny → pozastavený (zranenie, prerušenie) → uzavretý (cieľ dosiahnutý)
+- Pri postupe na vyššiu úroveň sa do vzťahu **pridáva externý mentor** (UEFA, FIFA)
+- Záverečné hodnotenie cyklu nie je sedenie — je to **summary celého vzťahu**
+
+Otázka: jeden model alebo dva?
+
+## Rozhodnutie
+
+**Dva modely:**
+
+- **`MentoringCycle`** — kontainer, dlhodobý vzťah. Nie je aktivita. Stav: `active | paused | closed`. Zakladá ho mentor.
+- **`MentoringSession`** — aktivita, konkrétne stretnutie. Patrí pod `MentoringCycle` cez `cycleId`. Polymorfná aktivita ([ADR-006](0006-polymorphic-comments)) — má komentáre.
+
+```typescript
+interface MentoringCycle {
+  _id: ObjectId;
+  tenantId: ObjectId;
+  mentorPersonId: ObjectId;
+  menteePersonId: ObjectId;
+  externalMentors: Array<{ personId: ObjectId; addedAt: Date; }>;
+  state: 'active' | 'paused' | 'closed';
+  startedAt: Date;
+  closedAt?: Date;
+  finalAssessment?: string;  // free text pri uzavretí
+}
+
+interface MentoringSession {
+  _id: ObjectId;
+  tenantId: ObjectId;
+  cycleId: ObjectId;          // → MentoringCycle
+  occurredAt: Date;
+  duration: number;           // minutes
+  topics: string[];
+  summary: string;
+  nextSteps: string;
+  privateNotes?: string;       // mentor-only, viď ADR-007 Implementation
+  // ... + AuditFields
+}
+```
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Len Session bez Cycle** — Pros: jednoduché. Cons: ako modelovať dlhodobý vzťah? Cez query filter `mentorId+menteeId`? Stratíme stav vzťahu, externí mentori, finálne hodnotenie.
+- **(B) Cycle ako "Activity" s typom `mentoring_cycle`** — Pros: jeden model. Cons: cycle nemá `occurredAt`, nesedí na timeline, jeho čítanie cez activity timeline je mätúce.
+- **(C) Cycle (kontainer) + Session (aktivita)** ✅ — explicit hierarchy, každý má svoj prirodzený lifecycle.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Cycle je first-class entita** — vidíš v profile osoby aktívne cykly, môžeš ich filtrovať
+- **Sedenia spadajú do timeline** ako iné aktivity — tréning, zápas, sedenie všetko v jednej osi
+- **Finálne hodnotenie** má prirodzené miesto — Cycle.finalAssessment, nie Session
+- **Externí mentori** sú scoped na cyklus, nie globálne — `cycle.externalMentors[]`
+- **State management** je čistý — cycle má state, session ho nemá
+
+### Negatíva
+
+- **Dva queries pri zobrazení** — ak chceš vidieť cycle + sessions, musíš sa spýtať dvakrát ($lookup alebo dva calls)
+- **Cascade delete** — keď zatvoríš cycle, sessions ostávajú (sú historický záznam). Treba to vysvetliť v UI.
+- **Validation** — Session.cycleId musí pointovať na existujúci active alebo paused Cycle. Pri create Session check.
+
+### Riziká
+
+- **Orphan sessions** — keď cycle je zmazaný (mass cleanup), sessions zostanú orphan. **Mitigácia:** soft delete cycle, sessions ostávajú referenced. Hard delete cycle = cascade delete sessions cez explicit cleanup script.
+- **Mentor edit window expiry** — sedenie je editovateľné 24h. Po vypršaní sa zamkne. Cycle nikdy nezamyká. **Mitigácia:** clear UI komunikácia (countdown na sedení).
+
+## Implementačné poznámky
+
+ACL pravidlá:
+
+| Operácia | Mentor | Mentee | External mentor | Predseda komisie |
+|---|---|---|---|---|
+| Read cycle | ✅ | ✅ | ✅ (jeho cycle) | ✅ |
+| Edit cycle (state, externals) | ✅ | – | – | – |
+| Close cycle (finalAssessment) | ✅ | – | – | – |
+| Read session | ✅ | ✅ | ✅ (jeho cycle) | ✅ |
+| Create session | ✅ | – | – | – |
+| Edit session (24h window) | ✅ | – | – | – |
+| Comment on session | ✅ | ✅ | ✅ (jeho cycle) | – |
+
+**Súkromné poznámky mentora** (`MentoringSession.privateNotes`) sú v **separátnej collection** s extra prísnou ACL — nikdy v `MentoringSession` dokumente, ktorý sa serializuje pre mentee. Detail v dokumentácii [features/mentoring](../features/mentoring).
+
+## Otvorené otázky
+
+- **Štruktúra summary** — voľný text vs štruktúrovaná schema. Viď [Q-015](../../../../OPEN_QUESTIONS.md). Default voľný text pre MVP.
+- **Externí mentor identity** — viď [Q-012](../../../../OPEN_QUESTIONS.md).

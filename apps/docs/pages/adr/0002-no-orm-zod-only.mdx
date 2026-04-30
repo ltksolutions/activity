@@ -1,0 +1,83 @@
+# ADR-002 · Žiadne ORM, len Zod schémy + native MongoDB driver
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-001](0001-database-mongodb), [Q-008](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Po voľbe MongoDB ([ADR-001](0001-database-mongodb)) sme zvažovali, ako pristupovať k DB z Node.js kódu. Existujú tri vrstvy abstrakcie:
+
+1. **Native driver** — priamy MongoDB driver, žiadna abstrakcia
+2. **ODM (Mongoose)** — pridáva schémy, hooks, virtuals, populácie
+3. **Plne typovaný ORM-style** (napr. typegoose) — TypeScript-first, viac magie
+
+Tím by mal mať TypeScript-first developer experience a vyhnúť sa runtime mágii ORM-iek, ale zároveň potrebujeme **niečo**, čo validuje dáta pri zápise aj čítaní.
+
+## Rozhodnutie
+
+**Native MongoDB driver + [Zod](https://zod.dev/) schémy v aplikačnej vrstve + JSON Schema validátory na MongoDB collection level.**
+
+Žiadne Mongoose, žiadny ORM. Repository pattern je manuálny.
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Mongoose** — najpopulárnejšie ODM. Pros: konvenčné, veľa tutorialov. Cons: schemes are runtime, generated TypeScript types sú vágne (`Document<any>`), hooks vytvárajú implicitné side effects, populácie sú performance trap, schéma drift voči Zod by nás stál mentálnu energiu.
+- **(B) Typegoose** — TypeScript-first wrapper nad Mongoose. Rovnaké cons ako Mongoose, plus class-based API (decorators), ktoré nie všetkým sedí.
+- **(C) Native driver + Zod** ✅ — Zod je single source of truth pre schému. Z nej vieme generovať TypeScript typy aj JSON Schema pre Mongo validátor. Žiadna runtime mágia.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Single source of truth** — Zod schéma definuje tvar dokumentu raz, zvyšok je odvodený
+- **Žiadny ORM tax** — repository pattern je explicitný, kód robí čo vidíš
+- **TypeScript types sú presné** — `z.infer<typeof PersonSchema>` je presný typ, nie `any`
+- **Validácia pri zápise aj čítaní** — `Schema.parse(doc)` po `findOne` chytí schema drift
+- **Tooling** — `zod-to-json-schema` automaticky exportuje JSON Schema pre Mongo validator
+
+### Negatíva
+
+- **Viac boilerplate** — manuálny repository pattern, manuálne CRUD metódy. Pre 30+ collections to bude práca.
+- **Žiadne built-in populácie** — keď chceš join, píšeš `$lookup` aggregáciu manuálne
+- **Mentálne náklady na nového devela** — Mongoose pozná každý, repository pattern + Zod nie každý
+
+### Riziká
+
+- **Driftn medzi Zod schémou a Mongo collection validátorom** — ak niekto upraví Zod, ale validátor sa nepregeneruje, pri zápise vznikne mismatch. **Mitigácia:** build script v `packages/schemas`, ktorý generuje JSON Schema súbory; `npm run db:apply-validators` script aplikuje na DB.
+- **Kopírovanie repository kódu** medzi MCP servermi — keď je vzor na 5 collection-ách rovnaký. **Mitigácia:** zdielaný `BaseRepository<T>` v `packages/db` (ak sa neskôr ukáže potreba) — viď [Q-011](../../../../OPEN_QUESTIONS.md).
+
+## Implementačné poznámky
+
+Štruktúra v každom MCP servere:
+
+```
+src/
+├── repositories/
+│   ├── person.repo.ts         # CRUD pre Person
+│   └── organization.repo.ts   # CRUD pre Organization
+├── tools/                     # MCP tool implementácie
+└── db/
+    └── client.ts              # MongoClient connection helper
+```
+
+Schémy v `packages/schemas`:
+
+```
+packages/schemas/src/
+├── registry/
+│   ├── person.ts              # PersonSchema = z.object({...})
+│   └── organization.ts
+├── activity/
+└── courier/
+```
+
+Build krok generuje:
+- `packages/schemas/dist/json-schema/*.json` — pre Mongo validators
+- TypeScript types automaticky cez `tsc`
+
+## Otvorené otázky
+
+- **Schema sync mechanism** — manuálne `npm run db:apply-validators`, alebo migrácia? Viď [Q-008](../../../../OPEN_QUESTIONS.md).
+- **Repository code reuse** — kedy extraktovať `BaseRepository`? Viď [Q-011](../../../../OPEN_QUESTIONS.md).

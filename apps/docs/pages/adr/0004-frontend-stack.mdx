@@ -1,0 +1,77 @@
+# ADR-004 · Next.js 15 + Vercel pre frontend aplikácie
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-012](0012-vercel-stays), [Q-021](../../../../OPEN_QUESTIONS.md), [Q-022](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Pre frontend aplikácie (`app.activity.sportup.sk` + `admin.activity.sportup.sk`) sme zvažovali framework. Sportup.sk projekt nemá zafixovaný frontend stack pre svoje rozšírenia, takže sme mali voľnú ruku.
+
+Požiadavky:
+
+- **TypeScript-first** — celý ekosystém je TypeScript
+- **Server-side rendering** — pre SEO marketing webu, ale aj pre prvý paint v aplikácii
+- **Real-time** — chat potrebuje SSE alebo WebSocket
+- **i18n** — slovenčina default, ale možnosť rozšírenia
+- **Accessibility** — WCAG 2.1 AA je požiadavka pre verejné športové platformy
+
+## Rozhodnutie
+
+**Next.js 15** s App Router, TypeScript, hostované na **Vercel**.
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Remix** — výborný router, rovnako kompetentný pre SSR. Cons: menšia komunita, menej tutorialov, pri špecifických integráciách (napr. `next-intl`) lock-in do Next.js ekosystému.
+- **(B) SvelteKit** — peknejší DX, menší bundle. Cons: tím má React skúsenosti, prepnúť na Svelte je kontextový switch. Ekosystém menší.
+- **(C) Astro + React islands** — výborné pre obsah, ale aplikačné scenáre s real-time chatom by boli forsírované.
+- **(D) Next.js 15 + Vercel** ✅ — najjednoduchšia cesta z bodu A do bodu B. Tím má skúsenosti, dokumentácia v zlatom štandarde, ekosystém najväčší.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Vercel deployment trivialita** — push do main, deploy hotový. Preview environments per PR.
+- **App Router + RSC** — server components znižujú client bundle, lepšia perf
+- **Image optimization, font optimization** — built-in
+- **Edge runtime** — možno nasadiť časti na edge (geo-rýchlosť)
+- **Veľký ekosystém** — Tailwind, shadcn/ui, next-intl, react-query — všetko first-class
+
+### Negatíva
+
+- **Vendor lock-in** — Next.js je open-source, ale niektoré features (ISR, edge runtime) sú Vercel-specific. Migrácia na iný hosting je možná, ale práca.
+- **App Router learning curve** — server vs client components, async componenty, streaming. Tím musí pochopiť mental model.
+- **Často breaking changes** — Next.js verzie 13/14/15 priniesli nemalo zmien. Treba si ich strážiť.
+
+### Riziká
+
+- **Vercel pricing pri raste** — pri vysokej traffike môže vyletieť cena. **Mitigácia:** monitorovať bandwidth, function invocations; pri raste prejsť na self-hosted Vercel-compatible (`open-next` na AWS) — to je stále menej práce ako rewrite.
+- **App Router edge cases** — niektoré veci v App Routeri ešte rough (napr. error boundaries, parallel routes). **Mitigácia:** držať sa typických patterns, nesťahovať bleeding edge features.
+
+## Implementačné poznámky
+
+Stack v každej Next.js apke:
+
+- **Next.js 15** s App Router
+- **TypeScript strict**
+- **Tailwind CSS** + **shadcn/ui** komponenty (viď [Q-022](../../../../OPEN_QUESTIONS.md))
+- **react-query** (TanStack Query) pre server state, **Zustand** pre UI state ([Q-021](../../../../OPEN_QUESTIONS.md))
+- **next-intl** pre i18n ([Q-023](../../../../OPEN_QUESTIONS.md))
+- **react-hook-form + zod** pre formuláre
+
+Server components default; client components iba keď interaktívne ('use client').
+
+Repo štruktúra:
+
+```
+apps/platform-web/      # app.activity.sportup.sk
+apps/platform-admin/    # admin.activity.sportup.sk
+```
+
+## Otvorené otázky
+
+- **State management library** — viď [Q-021](../../../../OPEN_QUESTIONS.md)
+- **Component library** — shadcn/ui vs custom — viď [Q-022](../../../../OPEN_QUESTIONS.md)
+- **i18n library** — viď [Q-023](../../../../OPEN_QUESTIONS.md)
+- **Mobile** — PWA vs React Native — viď [Q-024](../../../../OPEN_QUESTIONS.md)

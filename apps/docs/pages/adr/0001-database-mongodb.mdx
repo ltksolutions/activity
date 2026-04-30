@@ -1,0 +1,63 @@
+# ADR-001 · MongoDB Atlas ako primárna databáza
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [Q-002](../../../../OPEN_QUESTIONS.md) (Atlas tier)
+
+## Kontext
+
+Pri návrhu doménového modelu sme zvažovali primárnu databázu pre tri MCP servery (registry, activity, courier). Doména má niekoľko vlastností, ktoré ovplyvňujú voľbu:
+
+- **Polymorfné aktivity** — `activityType` rozlišuje medzi tréningom, mentoringom, lekárskym ošetrením; každý má vlastnú schému, ale spoločnú kostru
+- **Husté embedded dáta** — mentoringové sedenie obsahuje pole tagov, summary, voliteľné prílohy; zápas má účastníkov v rôznych roliach
+- **Schéma sa bude vyvíjať** — nové typy aktivít, nové polia, lokálne rozšírenia per tenant
+- **Vysoká frekvencia zápisov** v aktivitnej vrstve, nižšia v registroch
+- **Multi-tenant** s `tenantId` na každom dokumente
+
+## Rozhodnutie
+
+**MongoDB Atlas** ako primárna databáza pre všetky tri MCP servery, **každý server má vlastnú databázu** (`activity_registry`, `activity_main`, `activity_courier`).
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) PostgreSQL + JSONB** — výborná konzistentnosť, JOIN podpora, ale schémové migrácie pre polymorfné aktivity sú bolestivé. JSONB je únik z relačnej štruktúry, ale stráca väčšinu jeho silných stránok.
+- **(B) Firestore** — Google managed NoSQL. Pre pripojenie cez Vercel by sa hodilo, ale doménový model je *iný* (žiadne JOIN-y, jiné indexovanie, dokumenty obmedzené 1MB). Vyžadovalo by celý rewrite.
+- **(C) MongoDB Atlas** ✅ — natívne polymorfné dokumenty, dobrá podpora pre embedded data, atlas search built-in, multi-region replication, vyspelý ekosystém driverov pre Node.js. Cloud-agnostic (deploy na AWS/GCP/Azure podľa preference).
+
+## Dôsledky
+
+### Pozitíva
+
+- **Schéma fits doménu** — polymorfné aktivity bez tabuľkových akrobacií
+- **Atlas Search** ako built-in feature — žiadny separátny Elasticsearch
+- **Cloud-agnostic** — ak by sme niekedy chceli zmeniť cloud, dáta sú prenosné
+- **CSFLE** built-in pre šifrovanie polí (rodné čísla, diagnózy)
+- **Mongo replica sety + automated backups** — produkčná spoľahlivosť bez self-management
+
+### Negatíva
+
+- **Žiadne natívne JOIN-y** — agregačné query (napr. join Person s Conversation participantmi) sú $lookup, ktoré je drahšie ako SQL JOIN. Riešenie: denormalizujeme tam, kde je to predvídateľné.
+- **Vendor lock-in mierny** — Atlas-specific features (Atlas Search, CSFLE managed key vault) by sa pri migrácii museli prepísať. MongoDB samotné je open-source.
+- **Naučiť tím Mongo** ak idú z PostgreSQL backgroundu
+
+### Riziká
+
+- **Nevyvážené tenanti** — veľký zväz (SFZ s tisíckami rozhodcov) v tej istej DB ako malý klub môže spôsobiť hot collection. **Mitigácia:** indexy s `tenantId` ako prefix, pri raste presunúť veľkých tenantov do dedicated cluster-u.
+- **Schema drift** — v MongoDB nie je vynútená schéma. **Mitigácia:** JSON Schema validátory na collection level, generované zo Zod schém v [`packages/schemas`](../../../../packages/schemas) (TBD package).
+
+## Implementačné poznámky
+
+Tri databázy:
+- `activity_registry` (server: registry-mcp) — Person, Organization, License, Codelist
+- `activity_main` (server: activity-mcp) — Activity (polymorfné), MentoringCycle, ActivityComment
+- `activity_courier` (server: courier-mcp) — Conversation, Message, ConversationParticipant
+
+Každý server má **vlastný connection string** (separátne credentials, separátne IAM). Cross-database query sa nerobia — len cross-database referencie cez ObjectId.
+
+Driver: native `mongodb` (nie Mongoose, viď [ADR-002](0002-no-orm-zod-only)).
+
+## Otvorené otázky
+
+- **Atlas tier per environment** — viď [Q-002](../../../../OPEN_QUESTIONS.md)
+- **Multi-tenant isolation** — field vs DB-per-tenant — viď [Q-007](../../../../OPEN_QUESTIONS.md)

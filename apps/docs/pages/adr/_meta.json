@@ -1,0 +1,19 @@
+{
+  "index": "Prehľad ADR",
+  "0001-database-mongodb": "ADR-001 · MongoDB Atlas",
+  "0002-no-orm-zod-only": "ADR-002 · Žiadne ORM, Zod schémy",
+  "0003-mcp-polyglot": "ADR-003 · Polyglot MCP servery",
+  "0004-frontend-stack": "ADR-004 · Next.js + Vercel",
+  "0005-mcp-as-primary-api": "ADR-005 · MCP ako primárne API",
+  "0006-polymorphic-comments": "ADR-006 · Polymorfné komentáre",
+  "0007-mentoring-cycle-vs-session": "ADR-007 · Cycle vs Session",
+  "0008-e2e-only-direct": "ADR-008 · E2E len pre direct",
+  "0009-parental-proxy": "ADR-009 · Rodičovský proxy",
+  "0010-sportup-mirror": "ADR-010 · Hybrid mirror sportup.sk",
+  "0011-sse-realtime": "ADR-011 · SSE pre real-time",
+  "0012-vercel-stays": "ADR-012 · Vercel zostáva",
+  "template": {
+    "title": "ADR template",
+    "display": "hidden"
+  }
+}

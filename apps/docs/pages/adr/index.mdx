@@ -1,0 +1,51 @@
+# Architecture Decision Records (ADR)
+
+> **ADR** je krátky dokument, ktorý zachytáva **jedno architektonické rozhodnutie** — kontext, prečo sa rozhodlo takto, aké sú dôsledky. Jeho účelom je, aby budúci vývojári (vrátane teba o pol roka) vedeli **prečo** je to takto, nielen **ako**.
+
+## Načo to je
+
+V projekte vznikne **veľa rozhodnutí**: stack, architektúra, doménové vzory. Ak ich nezachytíš, o pol roka:
+
+- Niekto sa spýta *"prečo používame MongoDB a nie Postgres?"* — odpoveď nie je v kóde, kód len beží
+- Niekto navrhne *"poďme prerobiť na ORM"* — bez kontextu pôvodného rozhodnutia nemôže informovane rozhodnúť
+- Tím sa rozpadne, prídu noví ľudia — chýba im kontext, ktorý mal pôvodný tím v hlave
+
+ADR-ka je **2-3 strany**, ktoré toto zachytia.
+
+## Konvencia
+
+- ADR-ky sú číslované poradovo (`0001-`, `0002-`, ...)
+- **Nikdy** sa neprepisujú po prijatí. Ak rozhodnutie zmeníme, **napíšeme novú ADR-ku**, ktorá *supersede-uje* tú starú
+- Stará ADR-ka zostáva ako historický záznam, len do nej pridáme `**Status: Superseded by ADR-NNNN**`
+- Píšeme po slovensky (alebo po anglicky, ak je tím medzinárodný — buď konzistentne)
+
+## Aktuálne ADR-ky
+
+| # | Názov | Status |
+|---|---|---|
+| [001](0001-database-mongodb) | MongoDB Atlas ako primárna databáza | ✅ Accepted |
+| [002](0002-no-orm-zod-only) | Žiadne ORM, len Zod schémy + native driver | ✅ Accepted |
+| [003](0003-mcp-polyglot) | Polyglot MCP servery (3 servery, nie monolit) | ✅ Accepted |
+| [004](0004-frontend-stack) | Next.js 15 + Vercel pre frontend | ✅ Accepted |
+| [005](0005-mcp-as-primary-api) | MCP ako primárne API rozhranie | ✅ Accepted |
+| [006](0006-polymorphic-comments) | Polymorfné komentáre cez (activityType, activityId) | ✅ Accepted |
+| [007](0007-mentoring-cycle-vs-session) | MentoringCycle ako kontainer, MentoringSession ako aktivita | ✅ Accepted |
+| [008](0008-e2e-only-direct) | End-to-end šifrovanie len pre direct chat | ✅ Accepted |
+| [009](0009-parental-proxy) | Rodičovský proxy ako separátne účastníctvo | ✅ Accepted |
+| [010](0010-sportup-mirror) | Hybrid mirror so sportup.sk projektom | ✅ Accepted |
+| [011](0011-sse-realtime) | Server-Sent Events pre real-time delivery | ✅ Accepted |
+| [012](0012-vercel-stays) | Vercel zostáva (žiadny Google Cloud) | ✅ Accepted |
+
+## Kedy napísať novú ADR-ku
+
+Vždy, keď urobíš rozhodnutie, ktoré:
+
+- **Sa ťažko zvráti** (zmena DB, zmena API protokolu, zmena auth schémy)
+- **Má dôsledky pre celý projekt** (jazyk, framework, dizajn vzorov)
+- **Zatvára otázku z [OPEN_QUESTIONS.md](../../../../OPEN_QUESTIONS.md)** — vtedy ADR-ka **musí**
+
+Pre malé rozhodnutia (názov metódy, konkrétny lib package) ADR-ka netreba.
+
+## Šablóna
+
+Pozri [template](template) (skrytá z navigácie, ale dostupná). Skopíruj a vyplň.

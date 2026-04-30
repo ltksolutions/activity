@@ -1,0 +1,124 @@
+# ADR-006 · Polymorfné komentáre cez (activityType, activityId)
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-001](0001-database-mongodb), [Q-013](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+V doméne sme zistili, že **mnoho rôznych entít môže mať komentáre**:
+
+- Mentoringové sedenie (mentor + mentee diskusia)
+- Tréning (tréner + asistent diskusia)
+- Lekárske ošetrenie (lekár + fyzio diskusia)
+- Hodnotenie zo zápasu (delegát + rozhodca diskusia)
+- ...
+
+Otázka: **ako modelovať komentáre**, aby sme nemali 10 rôznych collection-ov (`session_comments`, `training_comments`, `medical_comments`, ...).
+
+## Rozhodnutie
+
+**Jedna `ActivityComment` collection** s **polymorfnou referenciou** cez `(activityType, activityId)`.
+
+```typescript
+interface ActivityComment {
+  _id: ObjectId;
+  tenantId: ObjectId;
+
+  // Polymorfná referencia:
+  activityType: 'mentoring_session' | 'training' | 'medical_treatment' | 'match_evaluation' | ...;
+  activityId: ObjectId;
+
+  authorPersonId: ObjectId;
+  body: string;
+  mentions: ObjectId[];
+  createdAt: Date;
+}
+```
+
+ACL pre čítanie/písanie komentára sa **odvodzuje z parent aktivity** — ak vidíš sedenie, vidíš komentáre pod ním.
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Komentáre ako embedded array** v parent aktivite (`session.comments[]`) — Pros: jednoduché čítanie. Cons: 16MB document limit, hot document writes, nemožno vyhľadávať komentáre cross-activity.
+- **(B) Per-typu collection** (`session_comments`, `training_comments`, ...) — Pros: jasné schémy. Cons: 10+ collection-ov s rovnakou štruktúrou, duplicitný kód v repository, mention notifications cez všetky collection-y sú $unionWith.
+- **(C) Polymorfná collection** ✅ — DRY, single source of truth, mention queries cez celý komentárový corpus, jediné miesto pre moderation.
+
+## Dôsledky
+
+### Pozitíva
+
+- **DRY** — jeden CommentRepository, jeden MCP tool `add_comment`, jeden notification path
+- **Mention search** cez všetky komentáre v jednom query — `find({ mentions: personId })`
+- **Cross-activity moderation** — admin vidí všetky komentáre v jednej tabuľke
+- **Atlas Search** — full-text search nad všetkými komentármi spoločný
+- **Schema evolution** — pridať novú aktivitu nepridáva novú collection
+
+### Negatíva
+
+- **`activityType` musí byť enum** — typo by spôsobil orphan komentár. Validácia cez Zod enum, nie voľný string.
+- **Cross-activity konzistentnosť** — keď aktivita je zmazaná, jej komentáre treba tiež zmazať. **Manuálny cascade** v repository (Mongo nemá foreign keys).
+- **Indexovanie** — kompozitný index `(tenantId, activityType, activityId, createdAt)` musí byť presný
+
+### Riziká
+
+- **Schema drift** — niekto pridá nový `activityType` do enum-u, ale nezvládne ACL pre čítanie. **Mitigácia:** ACL resolver je per-activityType pluginbased, vynúti pri MCP tool registration.
+- **Performance pri load-e** — populárne aktivity (oficiálny zápas) môžu mať tisíce komentárov. **Mitigácia:** pagination + Atlas Search index, cache top-N v Redis.
+
+## Implementačné poznámky
+
+Schéma:
+
+```typescript
+// packages/schemas/src/activity/comment.ts
+export const ActivityCommentSchema = z.object({
+  _id: ObjectIdString,
+  tenantId: ObjectIdString,
+
+  activityType: z.enum([
+    'mentoring_session',
+    'training',
+    'match_participation',
+    'medical_treatment',
+    'match_evaluation',
+    'donation',
+    'sponsor_activation',
+  ]),
+  activityId: ObjectIdString,
+
+  authorPersonId: ObjectIdString,
+  body: z.string().min(1).max(5000),
+  mentions: z.array(ObjectIdString).default([]),
+
+  ...AuditFields.shape,
+});
+```
+
+Indexy:
+
+```typescript
+// Primárny query: komentáre pod konkrétnou aktivitou (chronologicky)
+{ tenantId: 1, activityType: 1, activityId: 1, createdAt: -1 }
+
+// Notifications: komentáre, kde som mentioned
+{ tenantId: 1, mentions: 1, createdAt: -1 }
+
+// Moderation: všetky komentáre od konkrétneho autora
+{ tenantId: 1, authorPersonId: 1, createdAt: -1 }
+```
+
+ACL resolver pattern:
+
+```typescript
+// src/acl/comment.ts
+export async function canReadComment(comment, person): Promise<boolean> {
+  // Delegujeme na ACL parent aktivity
+  const parent = await getActivityById(comment.activityType, comment.activityId);
+  return canReadActivity(parent, person);
+}
+```
+
+## Otvorené otázky
+
+- **Indexovanie pri load-e** — aké presné indexy vytvoriť? Pozri [Q-013](../../../../OPEN_QUESTIONS.md). Začať s minimal sadou, zmerať `db.collection.explain()`, optimalizovať podľa reality.

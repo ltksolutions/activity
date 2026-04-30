@@ -1,0 +1,83 @@
+# ADR-005 · MCP ako primárne API rozhranie
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-003](0003-mcp-polyglot)
+
+## Kontext
+
+Pri návrhu API vrstvy sme zvažovali, aký protokol budú servery vystavovať klientom. Tradičné voľby:
+
+- REST nad HTTP
+- GraphQL
+- gRPC
+- tRPC (TypeScript-first)
+
+Všetko sú validné, ale existuje **nový protokol — Model Context Protocol (MCP)** od Anthropic, ktorý je navrhnutý pre AI agentov, ale použiteľný aj pre regulárne klienty.
+
+Doména **activity** má dve dôležité vlastnosti:
+
+1. **AI agenti budú klientov** — mentor by mal byť schopný cez Claude alebo iný asistent vyplniť sedenie hlasom; tréner cez agenta vyhľadávať tréningy. AI klienti sú first-class use case, nie afterthought.
+2. **MCP je samo-popisné** — tools, resources, prompts sú definované so schémou, ktorá je čitateľná pre LLM. Klient si vie cez `tools/list` sám zistiť, čo server poskytuje.
+
+## Rozhodnutie
+
+**MCP** je primárne API rozhranie pre všetky tri MCP servery (`registry-mcp`, `activity-mcp`, `courier-mcp`).
+
+REST gateway (`api.activity.sportup.sk`) je **proxy nad MCP**, vystavená pre HTTP klientov, ktorí MCP nepodporujú (napr. tradičné webhooks, integrácie s tretími stranami).
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Pure REST** — najkonvenčnejšie. Cons: schéma je v swagger/openapi, ale nie je strojovo prepojená s implementáciou; AI klienti by museli mať vlastný layer. Verbose.
+- **(B) GraphQL** — flexibilné, ale pre náš use case overkill. Doménový model nie je tak prepojený, aby z toho GraphQL mal veľkú hodnotu.
+- **(C) gRPC** — výborne typed, ale binary protokol je harder to debug a niektoré klienti (browsery) ho nepodporujú natívne.
+- **(D) tRPC** — TypeScript-first, ale vyžaduje TypeScript klient (lock-in), žiadna AI agent integrácia.
+- **(E) MCP + REST gateway** ✅ — natívna AI agent integrácia, samo-popisné API, REST proxy pre tradičné klienty.
+
+## Dôsledky
+
+### Pozitíva
+
+- **AI klienti first-class** — Claude, ChatGPT, alebo custom agent môže priamo používať aplikáciu cez MCP
+- **Self-describing API** — klient si cez `tools/list` zistí dostupné operácie
+- **Schema validation built-in** — každý MCP tool má JSON Schema input
+- **Resources ako prvotriedna abstrakcia** — `mcp://activity/sessions/{id}` je natívne URI
+- **REST gateway pre kompatibilitu** — kto MCP nechce, použije REST
+
+### Negatíva
+
+- **MCP je nový** — protokol vznikol 2024, ekosystém ešte mladý. Tooling, libraries, examples sú menej zrelé než REST.
+- **Mental model novšia** — vývojári musia naučiť tools/resources/prompts dichotómiu
+- **Dvojitý layer** (MCP + REST gateway) — viac kódu, viac údržby
+
+### Riziká
+
+- **MCP špecifikácia sa môže meniť** — Anthropic ju vyvíja. **Mitigácia:** držať sa stable subset, nepoužívať bleeding edge features.
+- **REST gateway drift** — keď pridáš MCP tool, REST endpoint sa nemusí pridať. **Mitigácia:** auto-generate REST endpointov z MCP tool registry pri build-e.
+
+## Implementačné poznámky
+
+Štruktúra MCP servera:
+
+```
+src/
+├── tools/              # MCP tools (akcie: register_person, create_session, ...)
+├── resources/          # MCP resources (statické dáta: schémy, codelists, ...)
+├── prompts/            # MCP prompts (LLM templates: "summarize_session", ...)
+└── server.ts           # MCP server bootstrap
+```
+
+REST gateway pattern:
+
+```
+api.activity.sportup.sk/rest/v1/persons        → POST registry-mcp tool register_person
+api.activity.sportup.sk/rest/v1/persons/:id    → GET registry-mcp resource mcp://registry/persons/{id}
+```
+
+Auth: rovnaké JWT pre MCP aj REST. REST gateway nerobí žiadnu logiku, len prekladá HTTP → MCP call.
+
+## Otvorené otázky
+
+- **MCP transport** — stdio (pre CLI agentov) vs HTTP+SSE (pre web/cloud). Pre náš deployment na Cloud Run = HTTP+SSE.
+- **Auto-generation REST z MCP** — manuálne pre MVP, automatizovať pri raste.

@@ -1,0 +1,111 @@
+# ADR-011 · Server-Sent Events + Redis Pub/Sub pre real-time delivery
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-003](0003-mcp-polyglot), [ADR-008](0008-e2e-only-direct), [Q-003](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Aplikácia má **real-time use case-y**:
+
+- **Chat** — keď partner napíše správu, máš ju vidieť hneď (nie čakať refresh)
+- **Notifikácie** — nový komentár pod sedením, mention v chate, zmena stavu cyklu
+- **Live údaje** — počet účastníkov v group chat, "kto píše práve teraz" indikátor (voliteľné)
+
+Otázka: **aký transport použiť** medzi serverom a klientom?
+
+## Rozhodnutie
+
+**Server-Sent Events (SSE)** ako klientský transport, **Redis Pub/Sub** ako server-side broadcast medzi MCP servermi.
+
+Pipeline:
+
+```
+Klient A pošle správu cez courier-mcp tool send_message
+    ↓
+courier-mcp uloží do Mongo (collection: messages)
+    ↓
+courier-mcp publishuje na Redis channel "courier.message.created.<conversationId>"
+    ↓
+Všetky inštancie courier-mcp subscribed na ten channel dostanú notifikáciu
+    ↓
+Inštancia, kde má klient B otvorené SSE connection, pošle udalosť cez SSE
+    ↓
+Klient B prijme správu, UI sa aktualizuje
+```
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) WebSocket** — bidirectional, klasické riešenie pre real-time. Pros: full-duplex. Cons: HTTP/2 multiplexing nepodporuje, infra musí podporovať upgrade handshake, scaling cez load balancer komplikované.
+- **(B) MongoDB Change Streams** — notifikácia priamo z Mongo. Pros: žiadny extra service. Cons: každý server by potreboval Change Stream watcher, Mongo connection pool by bol naplnený long-lived watchers, distributed scenario komplikovaný.
+- **(C) Long polling** — klient sa opakovane pýta. Pros: najjednoduchšie. Cons: overhead, latency.
+- **(D) SSE + Redis Pub/Sub** ✅ — SSE je jednosmerný (server → klient), čo nám stačí (klient posiela cez normálne MCP tool calls). Redis je vyspelý broadcast layer. Standardný HTTP/2 friendly.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Štandardný HTTP/2** — žiadne upgrade handshake, normálny GET request s `Accept: text/event-stream`
+- **Auto-reconnect built-in** — EventSource API v prehliadači sa automaticky pripája pri výpadku
+- **Funguje cez proxy/CDN** — Cloudflare, Vercel, atď. SSE podporujú; WebSocket niekedy problémy
+- **Distributed-ready** — Redis Pub/Sub broadcastuje cez všetky courier-mcp inštancie naraz
+- **Backpressure** — server vie ovládať flow (v SSE), klient nemôže preťažiť server
+
+### Negatíva
+
+- **Iba server → klient** — keď klient chce poslať správu, musí to spraviť cez normálne MCP tool call (HTTP POST). Žiadny *full-duplex* nad jednou connectionou.
+- **Connection limit per browser** — niektoré prehliadače obmedzujú počet open SSE connection na doménu (6 v starších). **Mitigácia:** singleton SSE connection pre aplikáciu, multiplexing eventov cez `event` field.
+- **Redis ako single point of failure** — keď Redis padne, real-time delivery je preč. **Mitigácia:** Redis HA (clustered mode), graceful degradation (klient periodicky polluje pri SSE výpadku).
+
+### Riziká
+
+- **Memory leak v open SSE connections** — keď klient zatvorí tab bez clean disconnect, server musí timeoutnúť. **Mitigácia:** server-side heartbeat každých 15s, klient timeout 30s.
+- **At-most-once delivery** — Redis Pub/Sub nie persistent, chýbajúca správa pri dropovaní connection sa nepošle. **Mitigácia:** klient pri reconnect sa pýta cez normálne MCP tool `list_messages_since(timestamp)` a doháňa zameškané.
+- **Authentication v SSE** — JWT v query parameter (cookies fungujú, ale niektoré prostredia ich blokujú). **Mitigácia:** krátkožijúci token (5 min), refresh cez normálne API.
+
+## Implementačné poznámky
+
+SSE endpoint v courier-mcp:
+
+```typescript
+// GET /sse/conversations
+// Query: ?token=<short-lived-jwt>
+//
+// Response: text/event-stream
+//
+// event: message
+// data: { conversationId: "...", messageId: "...", ... }
+//
+// event: heartbeat
+// data: {}
+```
+
+Redis channels:
+
+```
+courier.message.created.<conversationId>     → broadcast nového message
+courier.conversation.member-changed.<convId> → broadcast pri pridaní/odobraní účastníka
+notification.<personId>                      → push notifikácie pre konkrétnu osobu
+```
+
+Klient connection:
+
+```typescript
+const sse = new EventSource(`/sse/conversations?token=${shortLivedToken}`);
+sse.addEventListener('message', (e) => {
+  const data = JSON.parse(e.data);
+  // update UI
+});
+```
+
+Server scaling:
+
+- Cloud Run min-instances=2 (SSE potrebuje persistent, žiadny cold start)
+- Sticky session NIE TREBA (Redis Pub/Sub broadcastuje cez všetky inštancie)
+- Connection limit per inštanciu ~10k (Linux file descriptors), pri raste škálovať horizontálne
+
+## Otvorené otázky
+
+- **Redis hosting** — Upstash vs Redis Cloud vs self-hosted. Viď [Q-003](../../../../OPEN_QUESTIONS.md).
+- **Push notifications mobile** — SSE nie je vhodné pre PWA v background. Treba Web Push API (VAPID keys), cez Firebase Cloud Messaging alebo vlastné. **Out of scope pre MVP.**

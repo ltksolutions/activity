@@ -1,0 +1,109 @@
+# ADR-009 · Rodičovský proxy ako separátne ConversationParticipant
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-008](0008-e2e-only-direct), [features/parental-proxy](../features/parental-proxy)
+
+## Kontext
+
+Slovenský šport má veľa detí. Detský šport do 16 rokov (parametrizovateľné per klub) prebieha **bez plného účtu dieťaťa** — komunikuje za neho rodič.
+
+Doménová realita:
+
+- Tímový chat U13 má 12 hráčov, ale 12 účastníkov sú **rodičia** (každý ako *zástupca* svojho dieťaťa)
+- Rodič v chate vystupuje **v mene dieťaťa**, nie sám za seba
+- Ak má rodič v tom istom tíme **dvoch synov**, je v chate dvakrát (raz ako proxy Adamka, raz ako proxy Janka)
+- V deň 16. narodenín dieťa získava vlastný účet, rodič **stráca** proxy účastníctvo (s grace period)
+- Po 16. roku má dieťa vlastný direct chat s lekárom/mentorom, ale rodič má **read-only prístup** do plnoletosti
+
+Otázka: **ako toto modelovať**?
+
+## Rozhodnutie
+
+**Rodičovský proxy je samostatné `ConversationParticipant` účastníctvo s `participantType: 'proxy_for_minor'`**, ktoré odkazuje na **dvoch ľudí** — `personId` (rodič, kto píše) a `representedPersonId` (dieťa, koho zastupuje).
+
+```typescript
+interface ConversationParticipant {
+  _id: ObjectId;
+  conversationId: ObjectId;
+
+  participantType: 'direct' | 'proxy_for_minor' | 'parent_reader';
+  personId: ObjectId;              // kto skutočne píše/číta
+  representedPersonId?: ObjectId;  // (len pre proxy) — koho zastupuje
+
+  joinedAt: Date;
+  leftAt?: Date;
+  graceEndsAt?: Date;              // pri zmene veku — kedy proxy účastníctvo končí
+}
+```
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Rodič ako "obyčajný" účastník** s extra metadátami — Pros: jednoduchšie. Cons: stratí sa kontext "v mene koho", UI nevie zobraziť `(rodič Adamka)`, pri viacerých deťoch v jednom chate by museli byť účastníci rovnakí (collision).
+- **(B) Account impersonation** — rodič sa "prihlási" ako dieťa. Pros: jednotný API. Cons: audit log nevie rozlíšiť rodiča od dieťaťa, právne problémy (rodič NIE JE dieťa).
+- **(C) Separátny ConversationParticipant** ✅ — explicit, jednoznačný, podporuje multi-children.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Audit log je presný** — vidíš `Peter Novák (rodič Adamka)` ako autora správy, nie ako Adamka
+- **Multi-children scenár funguje** — rodič dvoch synov v U13 má dva participant rows v tej istej conversation
+- **Lifecycle transitions sú čisté** — keď dieťa má 16, system automaticky vytvorí *nový* participant (pre dieťa) a *deactivuje* proxy (s grace period)
+- **UI zobrazenie jasné** — tag `(rodič Adamka)` pri správach
+- **GDPR friendly** — keď rodič odstúpi (rozvod, atď.), len jeho participant zmizne, dieťaťové správy ostávajú
+
+### Negatíva
+
+- **Schéma komplexnejšia** — `participantType` enum, dvojité reference na Person
+- **Notification logic** — keď niekto napíše do chatu, kto má dostať notifikáciu? Rodič (lebo on čítáva) alebo dieťa (lebo je o ňom reč)? **Decision:** rodič dostane (on je active user). Detail v [features/courier](../features/courier).
+- **Privacy gate pre direct chat** — dieťa po 16. roku má direct chat s mentorom, rodič `parent_reader` má read-only. UI musí dieťaťu jasne komunikovať: *"Rodič číta tieto konverzácie do tvojich 18. narodenín"*.
+
+### Riziká
+
+- **Edge case: rozvod rodičov** — obaja rodičia môžu byť proxy súčasne, alebo len jeden? Doménová odpoveď: závisí od právnej dohody. **Mitigácia:** model dovoľuje viacero proxy účastníkov, organizácia/súd určí, ktorí.
+- **Deaktivácia v deň 18. narodenín** — všetky `parent_reader` participanti dieťaťa sa deaktivujú jednorázovo. **Mitigácia:** background scheduled job, ktorý beží denne a spracuje birthdays.
+- **E2E direct chat s read-only rodičom** — kľúč musí byť dostupný pre 3 strany (dieťa, odborník, rodič). **Mitigácia:** trojhľadový kľúč, server uchováva rodičovskú časť, dieťa s odborníkom majú E2E session — viď [ADR-008](0008-e2e-only-direct).
+
+## Implementačné poznámky
+
+Lifecycle prechody:
+
+```
+Vek dieťaťa < 16 (alebo `minorSelfJoinAge` per klub):
+    Dieťa NEMÁ účet
+    Rodič má 1+ ConversationParticipant per dieťa s participantType='proxy_for_minor'
+
+Vek dieťaťa = 16:
+    1. Dieťa získava vlastný účet
+    2. Existujúce 'proxy_for_minor' participants → deactivated (graceEndsAt = +30 days)
+    3. Po grace period sú soft-deleted (audit history zostáva)
+    4. Pre direct chat dieťaťa s odborníkom: rodič → 'parent_reader' (read-only do 18)
+
+Vek dieťaťa = 18:
+    'parent_reader' participants → deactivated (graceEndsAt = +30 days)
+    Po grace period: deti má plnú kontrolu
+```
+
+Background job: `daily-age-transitions.cron.ts` v `activity-mcp`.
+
+Notification path:
+
+```typescript
+// Pseudokod
+function shouldNotify(participant: ConversationParticipant, message: Message): boolean {
+  if (participant.participantType === 'proxy_for_minor') {
+    return true;  // rodič dostane notifikáciu
+  }
+  if (participant.participantType === 'parent_reader') {
+    return false;  // rodič číta, ale nedostáva push (privacy gate)
+  }
+  return participant.personId !== message.authorPersonId;
+}
+```
+
+## Otvorené otázky
+
+- **`minorSelfJoinAge` default value** — momentálne 16, treba potvrdiť s právnym oddelením vzhľadom na slovenské zákony o ochrane mladistvých
+- **Dual-parent edge case** — obaja rodičia môžu byť proxy, ale ako pri rozvode? Treba mať aspoň manuálnu cestu pre admina deaktivovať jedného.

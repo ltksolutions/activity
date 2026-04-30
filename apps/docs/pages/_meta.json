@@ -15,6 +15,7 @@
   "ops": "Prevádzka",
   "ui": "UI",
   "glossary": "Slovník pojmov",
+  "adr": "ADR (rozhodnutia)",
   "github_link": {
     "title": "GitHub ↗",
     "type": "page",

@@ -1,0 +1,78 @@
+# ADR-008 · End-to-end šifrovanie len pre direct chat
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-009](0009-parental-proxy), [Q-017](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Chat (Courier) je citlivá oblasť. Tréner s rodičom riešia osobné veci dieťaťa, mentor s mentee diskutujú výkon, lekár s pacientom zdravotný stav. **Šifrovanie je potreba**.
+
+Typy konverzácií:
+
+- **Direct (1:1)** — dvaja účastníci, žiadna moderácia, súkromie absolútne
+- **Group (3+)** — tímové chaty, klubové oznamy, realizačný tím; admin organizácie môže potrebovať moderovať
+- **Broadcast** — klubové oznamy fanúšikom, komisia rozhodcom; verejnejšie, žiadne tajomstvá
+
+Otázka: **end-to-end šifrovanie pre všetky, alebo len pre niektoré?**
+
+## Rozhodnutie
+
+**End-to-end šifrovanie len pre `direct` (1:1) konverzácie.**
+
+Group a broadcast konverzácie sú **server-side šifrované** (encryption at rest), ale server má kľúč a admin môže pri pravnej potrebe (subpoena) alebo moderation prečítať obsah.
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) E2E pre všetky typy** — najtvrdšia privacy. Cons: žiadna moderation, žiadne backup keyword search, pri strate device-u stratiš history. Pre tímový chat U13 je to overkill — všetci účastníci by museli držať kľúče, rodičia by stratili history pri zmene mobilu.
+- **(B) Žiadne E2E, len server-side** — najjednoduchšie. Cons: server má prístup k všetkým intímnym konverzáciám medzi mentor-mentee, lekár-pacient. Privacy nedostatočná.
+- **(C) E2E len pre direct** ✅ — kompromis. Najcitlivejšie konverzácie sú E2E, group/broadcast sú moderovateľné.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Direct chat je technicky súkromný** — server vidí len ciphertext, ani admin nečíta
+- **Group chat je moderovateľný** — admin môže riešiť harassment, šikanu (pre tímový chat U13 to je dôležité — rodičia očakávajú, že klub vie zasiahnuť)
+- **Broadcast chat je searchable** — fanúšik si môže vyhľadávať klubové oznamy
+- **Backup a recovery** sú možné pre group/broadcast (server môže reindexovať)
+
+### Negatíva
+
+- **Komplexnosť implementácie** — direct chat má iný code path než group/broadcast. Dva systémy.
+- **Direct chat features obmedzené** — full-text search nie je možný (server nevidí obsah). Cross-device sync vyžaduje key transfer protocol.
+- **Mental model pre používateľov** — UI musí jasne komunikovať: *"Tento chat je súkromný, nikto okrem teba a Petra ho nečíta"* vs *"Tento tímový chat môže prečítať admin klubu"*.
+
+### Riziká
+
+- **Strata kľúča v direct chat = strata history** — používateľ stratí mobil, nemá backup, history zmizla. **Mitigácia:** server-stored encrypted backup s passphrase (užívateľ si nastaví), recovery flow.
+- **Forward secrecy** — ak je kľúč kompromitovaný, mali by historické správy zostať bezpečné. Vyžaduje ratcheting protocol (Signal-style). **Mitigácia:** použiť libsignal alebo Olm/Megolm.
+- **Rodičovský proxy v direct** — keď dieťa po 16. roku má direct chat s odborníkom, rodič musí mať read-only prístup. **Tento konflikt s E2E** je riešený v [ADR-009](0009-parental-proxy) cez trojhľadový kľúč.
+
+## Implementačné poznámky
+
+Direct chat:
+
+- Klient generuje **identity key pair** pri registrácii
+- Pre konverzáciu: klient A si vyzdvihne public key klienta B z servera, derives session key cez X3DH protocol
+- Správy sú šifrované Megolm/Olm (Matrix protocol) alebo libsignal Double Ratchet
+- Server vidí len: `{from, to, ciphertext, timestamp}`
+
+Group chat:
+
+- Server generuje **conversation key**, šifruje správy AES-256-GCM
+- Key je v Mongo collection s prísnou ACL
+- Členovia sa autentifikujú voči serveru, server dešifruje pri delivery
+- Pri pridaní nového člena: nová conversation key, staré správy zostávajú zašifrované starým kľúčom (nový člen nevidí historiu)
+
+Broadcast:
+
+- Žiadne šifrovanie obsahu — broadcast je verejnejší
+- Encryption at rest na úrovni MongoDB (transparent disk encryption)
+
+## Otvorené otázky
+
+- **Konkrétny E2E protokol** — Signal Protocol vs Olm/Megolm vs custom. Viď [Q-017](../../../../OPEN_QUESTIONS.md).
+- **Key backup mechanism** — pre stratu device-u
+- **Cross-device sync** — keď používateľ má mobil + laptop, ako synchronizovať session keys?

@@ -1,0 +1,76 @@
+# ADR-003 · Polyglot MCP servery (3 servery, nie monolit)
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-001](0001-database-mongodb), [ADR-005](0005-mcp-as-primary-api)
+
+## Kontext
+
+Pri návrhu backend vrstvy sme zvažovali, či mať **jeden monolitický server** (jeden process, jedna DB), alebo **viacero špecializovaných serverov** (každý svoju doménu, svoju DB).
+
+Doména má tri jasne oddelené oblasti, ktoré sa **navzájom referencujú, ale nemajú prelínajúci sa write-path**:
+
+- **Registry** — Person, Organization, License, Codelist (nízka frekvencia zápisov, vysoká frekvencia čítania, identitné dáta)
+- **Activity** — Tréningy, mentoring, lekárske záznamy, komentáre (vysoká frekvencia zápisov, polymorfné, citlivé)
+- **Courier** — Chat, real-time delivery (najvyššia frekvencia, real-time SSE/Pub-Sub, separátny lifecycle)
+
+Tieto majú **rozdielne load profily**, **rozdielne indexačné stratégie**, **rozdielne škalovateľnosti**, a **rozdielne security/privacy potreby**.
+
+## Rozhodnutie
+
+**Tri samostatné MCP servery**, každý na svojej subdoméne, každý vlastnú databázu:
+
+| Server | Subdoména | DB | Hlavná zodpovednosť |
+|---|---|---|---|
+| `registry-mcp` | `registry-mcp.activity.sportup.sk` | `activity_registry` | Mirror sportup.sk, lokálne rozšírenia osôb |
+| `activity-mcp` | `activity-mcp.activity.sportup.sk` | `activity_main` | Aktivity, mentoring, komentáre |
+| `courier-mcp` | `courier-mcp.activity.sportup.sk` | `activity_courier` | Konverzácie, správy, real-time |
+
+Každý server je samostatný Node.js + Fastify proces, deployovaný separátne (Cloud Run alebo k8s).
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Monolit** — jeden server, jedna DB, všetko v jednom kóde. Pros: jednoduché na začiatku, žiadny network overhead. Cons: chat traffic blokuje registry queries, jeden incident zhodí celý systém, schema migration je riskantnejšia.
+- **(B) Microservices fine-grained** — viac serverov per resource (person-mcp, organization-mcp, activity-mcp, mentoring-mcp, ...). Pros: maximálna izolácia. Cons: 10+ servisov je príliš drahé na prevádzku pre malý tím.
+- **(C) Tri MCP servery** ✅ — kompromis. Tri natural seam-y v doméne, žiadna umelá fragmentácia.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Independent scaling** — courier-mcp môže mať 5 replicas pri špičkách, registry-mcp 1
+- **Independent deploy** — zmena v courier nezhodí activity ani registry
+- **Independent failure mode** — chat outage neblokuje aktivity workflow
+- **Schema isolation** — každý server má vlastné Mongo collection-y, nikto cudzí ich neupraví
+- **Security boundary** — courier môže mať prísnejšie firewall rules, separátne credentials
+
+### Negatíva
+
+- **Network overhead** — keď activity-mcp potrebuje vedieť meno Person, musí sa spýtať registry-mcp (network hop)
+- **Distribuované tranzakcie ťažké** — žiadne SQL `BEGIN TRANSACTION` cez tri DB. Riešenie: eventual consistency, idempotent operations, sagas pre kritické flow.
+- **Duplikácia identitných dát** — Person.displayName treba cache-ovať v activity-mcp pre rýchle čítanie. Synchronizácia cez webhook-y.
+
+### Riziká
+
+- **Inconsistent state** medzi servermi (napr. Person zmazaný v registry, ale activity ešte má referenciu). **Mitigácia:** soft delete + periodic reconcile job, pred-merge checks pred zmazaním.
+- **Kaskádne výpadky** — ak je registry-mcp down, activity-mcp nedokáže resolvovať mená. **Mitigácia:** local cache + graceful degradation (zobraz `[neznámy]` namiesto crashu).
+- **Service discovery** — keď activity-mcp volá registry-mcp, ako vie URL? **Mitigácia:** environment variables, no DNS-based discovery yet (jednoduchosť).
+
+## Implementačné poznámky
+
+Komunikácia medzi servermi:
+
+- **Synchronous read** (activity-mcp si chce vyzdvihnúť meno Person) → HTTP GET na registry-mcp
+- **Asynchronous events** (Person zmenil priezvisko) → Redis Pub/Sub channel `registry.person.updated`, ostatné servery sub-scribujú a invalidujú cache
+
+Každý server **nikdy** neotvorí connection do cudzej DB. Hranice sú tvrdé.
+
+Verzia API medzi servermi:
+- Vlastný interný `X-Internal-Service-Version` header
+- Backward compatibility: keď meníš schému, najprv pridaj support pre starý + nový formát, deploy, potom remove starý
+
+## Otvorené otázky
+
+- **Service mesh** vs explicitné HTTP klienty — pre 3 servery nie je mesh potrebné. Viď [Q-010](../../../../OPEN_QUESTIONS.md).
+- **Process per server vs serverless functions** — viď [Q-010](../../../../OPEN_QUESTIONS.md).

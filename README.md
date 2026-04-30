@@ -28,7 +28,18 @@ Aktuálne hotové:
 - ⏳ Admin aplikácia ([admin.activity.sportup.sk](https://admin.activity.sportup.sk)) — TBD
 - ⏳ Zdielané schémy package — TBD
 
-## Štruktúra repozitára
+## Pre senior vývojárov, ktorí preberajú projekt
+
+Ak preberáš projekt do implementačnej fázy, **začni tu**:
+
+1. **[HANDOFF.md](./HANDOFF.md)** — prehľad stavu, čo je hotové, čo TBD, fázy implementácie
+2. **[OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md)** — explicitný zoznam ~27 otvorených rozhodnutí, ktoré treba uzavrieť
+3. **[ADR (Architecture Decision Records)](https://docs.activity.sportup.sk/adr)** — 12 dokumentov, ktoré zachytávajú prečo sú veci tak ako sú (stack, doménové vzory, security)
+4. **[Dokumentácia](https://docs.activity.sportup.sk)** — kompletný popis systému
+
+Tieto štyri zdroje pokryjú 90% otázok, ktoré budeš mať pred prvým commitom.
+
+
 
 ```
 activity/

@@ -1,0 +1,109 @@
+# ADR-010 · Hybrid mirror so sportup.sk projektom
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-04-27
+> **Rozhodli:** Návrhová fáza (Jan Letko, asistent)
+> **Súvisí s:** [ADR-003](0003-mcp-polyglot)
+
+## Kontext
+
+**activity** je klient projektu **sportup.sk**, ktorý je nadradený a poskytuje *registre osôb a organizácií* pre celý slovenský šport. Ich rola je *kto je kto*, naša rola je *čo sa s nimi deje*.
+
+Otázka: **ako majú activity servery dostať identitné dáta** (Person.firstName, Organization.name)?
+
+Tri princípy:
+
+1. **Žiadne duplikovanie** identitných dát na úrovni master — sportup.sk je single source of truth
+2. **activity musí byť rýchle** — opakované HTTP volanie do sportup.sk pre každý load by zabilo perf
+3. **activity musí byť robustné** — keď sportup.sk je down, activity ďalej funguje (degradované, ale funguje)
+
+## Rozhodnutie
+
+**Hybrid mirror:**
+
+- **Identitné polia** (meno, dátum narodenia, rodné číslo, oficiálny email) sú **master v sportup.sk**, lokálne mirror-ované v `activity_registry` databáze cez webhook + nightly reconcile
+- **Aplikačné polia** (preferovaný jazyk UI, custom roly, history aktivít, mentoring cykly) sú **master v activity**, žiadny sync do sportup.sk
+
+```typescript
+// activity_registry.persons collection
+interface Person {
+  _id: ObjectId;
+  tenantId: ObjectId;
+  externalRefs: {
+    sportupSkId: string;  // ID v sportup.sk projekte
+  };
+
+  // Mirror polia (read-only, sync zo sportup.sk)
+  firstName: string;
+  lastName: string;
+  dateOfBirth: Date;
+  // ...
+
+  // Lokálne polia (master v activity)
+  preferredLanguage: 'sk' | 'cs' | 'en' | ...;
+  customRoles: string[];
+  mirroredAt: Date;     // kedy sme mirror naposledy synčili
+}
+```
+
+## Alternatívy, ktoré sme zvážili
+
+- **(A) Žiadny mirror, vždy live HTTP call** — Pros: žiadny stale data. Cons: každý load aktivity = N HTTP volaní do sportup.sk pre N osôb. Latency, downtime risk.
+- **(B) Plný mirror so sync** — všetky polia, vrátane aplikačných, sú v activity. Pros: úplná autonomia. Cons: dvojvrstvový master = sync problémy, kto je source of truth pre meno keď sa zmení v oboch?
+- **(C) Hybrid** ✅ — clear ownership: identitné polia sportup, aplikačné activity.
+
+## Dôsledky
+
+### Pozitíva
+
+- **Rýchle čítanie** — Person.firstName je v lokálnej collection-i, žiadny network hop
+- **Robustné** — keď sportup.sk je down, activity ďalej slúži (s prípadne stale data, ale funguje)
+- **Clear ownership** — neexistuje konflikt "kto vlastní pole X", pretože každé pole má jasného mastera
+- **GDPR friendly** — keď osoba žiada delete v sportup.sk, mirror sa vymaže cez webhook; aplikačné dáta v activity ostávajú anonymizované
+
+### Negatíva
+
+- **Sync infraštruktúra** — webhook listener v registry-mcp, spracovanie failed deliveries, nightly reconcile
+- **Stale data window** — medzi zmenou v sportup.sk a webhook delivery môže byť pár sekúnd až minút
+- **Complexity v mental model** — vývojári musia pamätať, ktoré pole je mirror a ktoré lokálne. Treba to v kódovej dokumentácii jasne komunikovať.
+
+### Riziká
+
+- **Zmeškaný webhook** — server má downtime alebo bug pri spracovaní. Mirror je stale. **Mitigácia:** nightly reconcile job, ktorý porovnáva (cez `changedSince` parameter na sportup.sk API) mirror voči master a opraví drift.
+- **Webhook spoofing** — niekto pošle fake webhook a podstrčí zlé dáta. **Mitigácia:** HMAC podpisovanie webhookov, secret zdielaný so sportup.sk.
+- **Schema evolution** — sportup.sk pridá nové pole, activity ho nevie spracovať. **Mitigácia:** mirror ukladá len známe polia (whitelisted), neznáme silently ignoruje. Pri zmene schémy v sportup.sk treba PR do activity.
+
+## Implementačné poznámky
+
+Komponenty:
+
+- **Webhook listener** v `registry-mcp` na endpoint `/webhooks/sportup-sk` (HMAC signature check, idempotency)
+- **Mirror sync service** — spracuje webhook event, updatne `activity_registry.persons` document
+- **Nightly reconcile job** — beží denne 02:00 SLK, číta `sportup.sk/api/persons?changedSince=<lastSync>`, aplikuje delta
+- **Initial backfill** — pri spustení activity (alebo pri pridaní nového tenanta), kompletný load všetkých osôb cez bulk endpoint
+
+Master tabuľka — kto vlastní ktoré pole:
+
+| Pole | Master | Sync smer |
+|---|---|---|
+| Person.firstName, lastName | sportup.sk | sportup → activity |
+| Person.dateOfBirth | sportup.sk | sportup → activity |
+| Person.nationalId (rodné č.) | sportup.sk | sportup → activity (CSFLE) |
+| Person.officialEmail | sportup.sk | sportup → activity |
+| Person.preferredEmail | activity | – |
+| Person.preferredLanguage | activity | – |
+| Organization.name, address | sportup.sk | sportup → activity |
+| Organization.customSettings | activity | – |
+
+Pre **propose-change flow** (keď používateľ v activity zmení svoje meno) — vytvorí sa `PersonChangeProposal` v activity, prejde schvaľovacím procesom a finálne pošle PUT/PATCH do sportup.sk. Webhook pothom donesie zmenu späť.
+
+## Otvorené otázky
+
+Odhadované rozšírenia v sportup.sk projekte (PR-y, ktoré ich potrebujeme):
+
+- Webhook notifications endpoint pri zmene Person/Organization
+- HMAC signing webhooks
+- `changedSince` parameter na list endpoints
+- Bulk export endpoint pre initial backfill
+
+Toto bude treba navrhnúť/implementovať v sportup.sk projekte. Buď to spravíme my ako PR, alebo sportup.sk tím sám.
