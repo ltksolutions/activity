@@ -98,6 +98,15 @@ const config: DocsThemeConfig = {
       <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
       <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
+      {/* PWA: web app manifest + installability */}
+      <link rel="manifest" href="/site.webmanifest" />
+      <meta name="application-name" content="activity docs" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-title" content="activity docs" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="format-detection" content="telephone=no" />
+
       {/* Open Graph */}
       <meta property="og:title" content="activity — dokumentácia" />
       <meta property="og:description" content="Verejná technická a produktová dokumentácia projektu activity" />
@@ -110,8 +119,10 @@ const config: DocsThemeConfig = {
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:image" content="https://docs.activity.sportup.sk/og-image.png" />
 
-      {/* Theme color (navy) */}
-      <meta name="theme-color" content="#1A2D47" />
+      {/* Theme color (SK Blue light, INK dark) */}
+      <meta name="theme-color" content="#1A3B8E" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
+      <meta name="color-scheme" content="light dark" />
     </>
   ),
 
@@ -127,24 +138,20 @@ const config: DocsThemeConfig = {
   i18n: [{ locale: 'sk', text: 'Slovenčina' }],
 
   /**
-   * Brand farby pre Nextra téma.
+   * Brand v2 farby pre Nextra tému.
    *
-   * Nextra používa HSL farby cez primaryHue + primarySaturation.
-   * Pre activity brand red #C8102E:
-   *   HSL(351, 85%, 42%)
-   * Pre navy #1A2D47:
-   *   HSL(216, 47%, 19%)
-   *
-   * Používame red ako primárny accent (linky, akcie, hover stavy).
-   * Navy zostáva ako tmavá identitná farba (footer, dark mode pozadie).
+   * Brand v2 má SK Blue ako primárnu farbu (#1A3B8E ≈ HSL(225, 70%, 33%))
+   * a SK Red (#C8243A) ako akcent. V Nextra téme používame SK Blue ako
+   * primaryHue — plní accent farby (linky, navigation, hover, headings).
+   * SK Red sa aplikuje cez vlastné CSS overrides a tlačidlá, ak treba.
    */
   primaryHue: {
-    dark: 351,   // red v dark mode
-    light: 351,  // red v light mode
+    dark: 225,   // SK Blue v dark mode
+    light: 225,  // SK Blue v light mode
   },
   primarySaturation: {
-    dark: 75,
-    light: 78,
+    dark: 55,
+    light: 70,
   },
 
   toc: {

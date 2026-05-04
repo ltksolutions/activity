@@ -1,35 +1,46 @@
 /* ============================================================
    activity — marketing web stylesheet
-   Brand: navy + red (slovenská národná farebnosť)
-   Founded on sportup.sk Design Manual v2.0 · 2026
+   Brand v2: SK Blue + SK Red (slovenská národná farebnosť)
+   Logo: Chat Stack · Type: Albert Sans + Geist + Geist Mono
    ============================================================ */
 
-:root {
-  /* ─── Brand farby ─── */
-  /* Navy — identitná farba (zhodne s sportup.sk) */
-  --color-navy: #1A2D47;
-  --color-navy-darker: #0F1A2A;
-  --color-navy-light: #2D4567;
+@import url('https://fonts.googleapis.com/css2?family=Albert+Sans:wght@700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap&subset=latin,latin-ext');
 
-  /* Red — activity akcent (slovenská brand red) */
-  --color-red: #C8102E;
-  --color-red-darker: #9C0C24;
-  --color-red-light: #E63950;
-  --color-red-bg-light: #FCE4E8;
+:root {
+  /* ─── Brand farby v2 ─── */
+  /* SK Blue — primárna identitná farba */
+  --color-navy: #1A3B8E;          /* primary brand (legacy name pre kompatibilitu) */
+  --color-navy-darker: #142E72;
+  --color-navy-light: #4A6DC4;
+  --sk-blue: #1A3B8E;
+  --sk-blue-light: #4A6DC4;
+
+  /* SK Red — activity akcent */
+  --color-red: #C8243A;
+  --color-red-darker: #A81D31;
+  --color-red-light: #D94A5E;
+  --color-red-bg-light: #FBE9EC;
   --color-red-bg-tint: #FFF5F6;
+  --sk-red: #C8243A;
+  --sk-red-light: #D94A5E;
+
+  /* Ink + Paper (neutrals) */
+  --ink: #0E0E10;
+  --paper: #FAFAF7;
+  --paper-warm: #F5F3ED;
 
   /* White */
   --color-white: #FFFFFF;
 
   /* ─── Semantické UI farby ─── */
-  --color-bg: #fafaf9;
+  --color-bg: var(--paper);
   --color-bg-alt: #ffffff;
-  --color-bg-dark: var(--color-navy);
-  --color-bg-tint: #F4F6F8;
+  --color-bg-dark: var(--ink);
+  --color-bg-tint: var(--paper-warm);
 
-  --color-text: #1f1f1f;
-  --color-text-muted: #595959;
-  --color-text-light: #8E8E92;
+  --color-text: var(--ink);
+  --color-text-muted: #3A3A3E;
+  --color-text-light: #6B6B70;
 
   --color-border: #e5e5e5;
   --color-border-strong: #d4d4d4;
@@ -55,10 +66,11 @@
   --color-danger: var(--color-red);
   --color-danger-bg: var(--color-red-bg-light);
 
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter,
-    "Helvetica Neue", sans-serif;
-  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", monospace;
+  /* Typography v2 — Albert Sans (display) + Geist (body) + Geist Mono (code) */
+  --font-display: 'Albert Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter,
+    'Helvetica Neue', sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
 
 
   /* Spacing scale */
@@ -108,7 +120,8 @@ body {
 
 /* Typography */
 h1, h2, h3, h4 {
-  line-height: 1.2;
+  font-family: var(--font-display);
+  line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.02em;
 }

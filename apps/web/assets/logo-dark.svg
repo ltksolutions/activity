@@ -1,7 +1,12 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 245" role="img" aria-label="activity UP">
-  <title>activity UP</title>
-  <path d="M860,14 L102,14 C50,14 8,55 6,108 C4,165 25,225 95,228 L860,228 C875,228 890,213 895,200 L902,138 C905,120 903,100 896,82 L888,30 C884,17 874,14 860,14 Z" fill="#FFFFFF"/>
-  <text x="55" y="180" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="180" font-weight="900" font-style="italic" fill="#1A2D47" letter-spacing="-4">activity</text>
-  <text x="900" y="180" font-family="Helvetica Neue, Helvetica, Arial Black, sans-serif" font-size="190" font-weight="900" font-style="italic" fill="#C8102E" letter-spacing="-3">UP</text>
+<svg width="400" height="90" viewBox="0 0 400 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="13" cy="20" r="10" fill="#4A6DC4"/>
+  <circle cx="29" cy="20" r="10" fill="#4A6DC4" fill-opacity="0.40"/>
+  <rect x="44" y="13" width="24" height="14" rx="7" fill="#4A6DC4" fill-opacity="0.22"/>
+  <circle cx="13" cy="50" r="10" fill="#4A6DC4"/>
+  <circle cx="27" cy="50" r="10" fill="#D94A5E" fill-opacity="0.80"/>
+  <circle cx="41" cy="50" r="10" fill="#4A6DC4" fill-opacity="0.35"/>
+  <rect x="56" y="43" width="16" height="14" rx="7" fill="#D94A5E" fill-opacity="0.20"/>
+  <circle cx="13" cy="78" r="10" fill="#FAFAF7" fill-opacity="0.20"/>
+  <rect x="29" y="71" width="48" height="14" rx="7" fill="#FAFAF7" fill-opacity="0.10"/>
+  <text x="96" y="63" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="46" letter-spacing="-1.5" fill="#FAFAF7">activity</text>
 </svg>
