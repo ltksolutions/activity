@@ -1,0 +1,152 @@
+# ADR-013: Brand v2 — vlastná identita namiesto sportup.sk derived
+
+**Status:** ✅ Accepted
+
+**Dátum:** 2026-05
+
+**Kontext otázky:** N/A (nebol v [OPEN_QUESTIONS.md](../../../../OPEN_QUESTIONS.md), rozhodnutie počas exekúcie)
+
+## Kontext
+
+V počiatočnej fáze projektu (apríl 2026) sa **activity** štartoval s brandingom odvodeným z projektu **sportup.sk**:
+
+- Primárna farba **navy** `#1A2D47` (zhodne s sportup.sk)
+- Akcent **slovak red** `#C8102E` (slovenská brand red)
+- Wordmark "AU" monogram (activity + sportup)
+- Generický favicon a OG image
+
+Tento prístup mal logiku — activity je *klient projektu sportup.sk* (pozri [ADR-010](0010-sportup-mirror)), takže zdielanie identity vyzeralo ako brand-konzistentný krok. Po niekoľkých týždňoch sa však ukázali tieto problémy:
+
+1. **Vizuálna nezreteľnosť na produktoch** — keď sú obe domény (`sportup.sk` aj `activity.sportup.sk`) takmer identické, používateľ nevie či je v registri osôb alebo v aktivitnej aplikácii. Sub-doména to nestačí signalizovať.
+2. **Marketing tension** — activity má vlastnú produktovú identitu (komunikačná platforma pre šport), nie je to *"len UI nad sportup.sk"*. Brand by to mal podporovať.
+3. **AU monogram** je funkčne nepoužiteľný v drobnejších kontextoch (favicon 16px, push notification, app icon) — abecedné monogramy sa pri zmenšovaní stratia.
+4. **Komunikačný subtext** chýbal — logo nehovorilo nič o produkte. Generic monogram ≠ chat platform.
+
+## Rozhodnutie
+
+Od mája 2026 prechádzame na **brand v2**, ktorý vychádza z týchto princípov:
+
+### 1. Slovenská národná farebnosť ako primárna identita
+
+| Token | Hex | Účel |
+|---|---|---|
+| `--sk-blue` | `#1A3B8E` | Primárna brand — odkazuje na slovenskú modrú v vlajke, mierne tmavší shade pre lepší kontrast s textom |
+| `--sk-red` | `#C8243A` | Akcent — zhodný s tradičnou slovenskou red, blízky pôvodnému `#C8102E` ale s mierne hlbším tónom |
+| `--ink` `#0E0E10`, `--paper` `#FAFAF7` | Neutrále | Premium feel, vyhýbame sa pure black/white |
+
+**Prečo to nie je problém vis-à-vis sportup.sk projekt:** sportup.sk si držal vlastný brand, ale jeho farby boli **navy + slovak red**. activity prevzaním national colors nestráca väzbu na slovenský šport — naopak ju posilňuje. Vzťah klient ↔ host stojí na **API kontraktoch a doménovej hierarchii** ([ADR-010](0010-sportup-mirror)), nie na zdielanej identite.
+
+### 2. Logo Chat Stack — komunikačný symbol
+
+Nový logo mark sa skladá z **troch riadkov bublín** ktoré reprezentujú tri typy komunikácie v aplikácii:
+
+| Riadok | Komunikácia | Vizuálne |
+|---|---|---|
+| 1 | **1:1** priama správa | Plný SK Blue krúžok + utlmené (3 účastníci, jeden aktívny) |
+| 2 | **Skupina** | SK Blue + SK Red bubble + utlmený SK Blue + Red pill (skupina s aktívnou osobou) |
+| 3 | **Broadcast** | Utlmený Ink krúžok + dlhý Ink pill (jeden vysielateľ, mnoho prijímateľov) |
+
+Symbol funguje na všetkých veľkostiach od 16px (favicon) do 1024px (app store icon). Rozkladá sa škálovateľne — v drobných kontextoch je rozpoznateľný siluetou aj pri strate detailov.
+
+### 3. Typografia: Albert Sans + Geist + Geist Mono
+
+| Font | Váhy | Účel |
+|---|---|---|
+| **Albert Sans** | 700 | Display, wordmark, nadpisy, CTA |
+| **Geist** | 400/500/600 | Body, UI, formuláre |
+| **Geist Mono** | 400/500 | Code, IDs, metadata, časy |
+
+**Albert Sans** ma charakteristické geometrické "a" a "y" ktoré sa hodí pre wordmark "activity". **Geist** (od Vercelu) je modern humanistic sans-serif s vynikajúcou čitateľnosťou pri dlhých textoch a dobrou podporou diakritiky. Obe sú **open-source** (OFL licencia), dostupné cez Google Fonts a fontsource.
+
+**Slovenská diakritika** vyžaduje merge `latin + latin-ext` subsetov — detail v [brand](/ui/brand#slovenská-diakritika).
+
+### 4. Kompletný brand asset set
+
+V `apps/web/assets/` (a kópie v `apps/docs/public/`):
+
+- **8 SVG logo variantov**: light, dark, mono, mono-white, on-blue, mark-only (light + dark), favicon adaptive
+- **Favicon set**: 16/32/192/512 PNG + multi-res ICO (16/32/48) + adaptive SVG
+- **Apple Touch Icon** 180×180 s paper background
+- **Maskable Android adaptive icons** 192/512 (biely Chat Stack na SK Blue, 20% safe area)
+- **Logo mark PNG** rasters 256/512/1024
+- **OG image** 1200×630 s tricolor stripe + Chat Stack + tagline
+- **PWA manifest** s theme_color SK Blue, 5 ikonami vrátane maskable
+
+## Dôsledky
+
+### Pozitívne
+
+✅ **Vizuálna identita sa nezamieňa** s sportup.sk — používateľ jasne vie kde je
+✅ **Logo komunikuje produkt** — Chat Stack hovorí "toto je o komunikácii" pri prvom pohľade
+✅ **Premium typografia** Albert Sans + Geist je current state-of-the-art a mladšia ako napr. Inter
+✅ **Plná slovenská diakritika** — kritické pre slovenský trh, treba `latin + latin-ext` subsety
+✅ **PWA-ready** — maskable ikony pre Android, manifest pre installable web app na obe domény
+✅ **Brand source v repe** — `branding-source/` obsahuje 3 interaktívne HTML s kompletnou definíciou, regenerovateľné cez `tools/build-brand-assets.py`
+✅ **ADR mechanizmus zachytáva *prečo*** — keď bude o pol roka niekto pýtať *"prečo SK Blue a nie navy?"*, odpoveď je tu
+
+### Negatívne
+
+❌ **Migrácia existujúcich materiálov** — všetky marketing materiály, prezentácie, social media posty s pôvodným AU brand-om treba prepracovať. Pre MVP fázu to nie je veľa, ale rastie s časom — preto rozhodnutie teraz, nie neskôr.
+❌ **Senior dev sa musí oboznámiť s brand** pred prvým commit-om do platform-web/admin — pridáva ~30min onboardingu. Mitigované existenciou [brand](/ui/brand) docu.
+❌ **Žiadny vizuálny vzťah s sportup.sk** — používatelia, ktorí prídu cez sportup.sk neuvidia "vizuálnu kontinuitu" na activity. Rozhodnutie: kontextu lepšie cez explicitný cross-link banner (*"Si v activity, klient projektu sportup.sk"*) než cez zdielanú identitu.
+
+### Neutrálne
+
+➖ Pôvodný navy `#1A2D47` je len mierne odlišný od `#1A3B8E` (oba sú modré v podobnom hue rangi 215-225°). Keby Vercel deploy zlyhal a vrátili sa staré stránky, používateľ by si zmenu nemusel hneď všimnúť — preto theme-color update v 8 HTML stránkach + manifest sú **kritická časť** brand v2 deploy-u.
+
+## Implementačné poznámky
+
+Brand v2 je **kompletne aplikovaný v repe** (commit `e12a4d3 feat(brand): apply v2 — Chat Stack, SK Blue/Red, Albert Sans + Geist`). Konkrétne:
+
+| Čo | Kde |
+|---|---|
+| CSS tokeny | `apps/web/styles.css` (`--sk-blue`, `--sk-red`, `--ink`, `--paper`, font tokeny) |
+| Nextra config | `apps/docs/theme.config.tsx` (`primaryHue: 225`, custom Logo komponent) |
+| HTML theme-color | 8× HTML stránky v `apps/web/` (`#1A3B8E`) |
+| PWA manifest | `apps/web/site.webmanifest` + `apps/docs/public/site.webmanifest` |
+| Brand assety | `apps/web/assets/` (20 súborov) + `apps/docs/public/` (kópie) |
+| Source HTML | `branding-source/activity-{logo,brand-manual,icons}.html` |
+| Regen tool | `tools/build-brand-assets.py` |
+| Brand doc | `apps/docs/pages/ui/brand.mdx` |
+
+Legacy assety zo starého brandu (`logo-navy.svg`, `logo-white.svg`, `logo.png`, `logo@2x.png`, `og-image.svg`, `logo-mark.png` legacy) boli **odstránené** — nie sú v `apps/web/assets/`.
+
+## Alternatívy ktoré sme zvažovali
+
+### A) Zostať s navy + slovak red (status quo)
+
+**Výhody:** žiadna migrácia, zdielaná identita s sportup.sk
+**Nevýhody:** všetky 4 problémy uvedené v Kontexte zostávajú; brand kvalita pod úrovňou produktovej ambície
+
+### B) Úplne iný color scheme (napr. teal + amber, čierno-biely minimalistic)
+
+**Výhody:** maximálna diferenciácia od sportup.sk
+**Nevýhody:** stráca slovenský kontext; activity slúži primárne SK trhu, NSC/NSF/SOV/UEFA partneri; brand bez slovenskej stopy pôsobí "internacionálne neutrálne" a stráca regional appeal
+
+### C) Brand v2 zvolený (SK Blue + SK Red + Chat Stack) ✓
+
+**Výhody:** SK kontext + product-specific symbol + premium typografia
+**Nevýhody:** migrácia (akceptovateľná v MVP fáze)
+
+## Kedy znova otvoríme
+
+Brand v2 je **stable rozhodnutie** pre nasledujúce minimum 12 mesiacov. Možné triggery pre brand v3:
+
+- Major produktový pivot (napr. activity sa stane data analytics platformou — Chat Stack by sa stal nesprávnym symbolom)
+- Akvizícia / merger so subjektom s vlastnou identitou
+- User research ukáže, že Chat Stack symbol je nečitateľný / mätúci pre target audience
+- Konflikt s ochrannou známkou (po právnej kontrole, ktorá zatiaľ neprebehla)
+
+Bez týchto triggerov sa k brandu nevraciame — drobné iterácie (jemné posuny shade, spacing v logu) sú možné bez novej ADR, len cez `branding-source/` HTML edit + regen.
+
+## Súvisiace ADR
+
+- **[ADR-004](0004-frontend-stack)** — Next.js 15 + Vercel pre frontend (kontext pre platform-web/admin kde sa brand bude aplikovať)
+- **[ADR-010](0010-sportup-mirror)** — vzťah s sportup.sk (potvrdzuje že brand môže byť nezávislý)
+
+## Súvisiace dokumenty
+
+- **[Brand manuál](/ui/brand)** — kompletný popis použitia brandu
+- **[Dizajnové princípy](/ui/design-principles)** — vyšší level UX/UI guidance
+- **`branding-source/`** v root-e repa — interaktívne HTML zdroje
+- **`tools/build-brand-assets.py`** — regen skript

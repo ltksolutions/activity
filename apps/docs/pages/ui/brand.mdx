@@ -1,0 +1,330 @@
+import { Callout } from 'nextra/components';
+
+# Brand manuál
+
+> Brand identita projektu **activity** — farby, typografia, logo, ikonografia. Tento dokument je referenčná pravda pre každého, kto vytvára používateľské rozhranie alebo vizuálny obsah pre activity (web aplikáciu, admin, docs, marketing materiály, prezentácie).
+
+## V skratke
+
+**Brand v2** (od mája 2026) — slovenská národná farebnosť ako primárna identita, žiadne vzťahy k corporate šablónam.
+
+| Rola | Hodnota |
+|---|---|
+| Primárna farba | **SK Blue** `#1A3B8E` |
+| Akcent | **SK Red** `#C8243A` |
+| Display font | **Albert Sans 700** |
+| Body font | **Geist** 400/500/600 |
+| Code font | **Geist Mono** |
+| Logo koncept | **Chat Stack** — 3 riadky abstraktného zoznamu konverzácií (1:1 / skupina / broadcast) |
+
+Rozhodnutie zachytáva [ADR-013](/adr/0013-brand-v2). Source HTML je v `branding-source/` v rote repa.
+
+## Farebná paleta
+
+### Primárne farby
+
+| Token | Hex | RGB | HSL | Použitie |
+|---|---|---|---|---|
+| `--sk-blue` | `#1A3B8E` | `26, 59, 142` | `225°, 70%, 33%` | Primárna brand farba — logo mark, CTA tlačidlá, linky, navigation, theme-color |
+| `--sk-red` | `#C8243A` | `200, 36, 58` | `351°, 69%, 46%` | Akcent — notifikácie, dôraz v texte, broadcast row v Chat Stack mark, error states |
+| `--ink` | `#0E0E10` | `14, 14, 16` | `240°, 7%, 6%` | Hlavný text, ikony, broadcast row utlmený v mark |
+| `--paper` | `#FAFAF7` | `250, 250, 247` | `60°, 23%, 97%` | Hlavné pozadie aplikácie |
+| `--paper-warm` | `#F5F3ED` | `245, 243, 237` | `45°, 22%, 95%` | Sekundárne pozadie (sekcie, karty) |
+
+### Dark mode varianty
+
+| Token | Hex | Účel |
+|---|---|---|
+| `--sk-blue-light` | `#4A6DC4` | SK Blue pre dark mode (vyšší kontrast voči Ink pozadiu) |
+| `--sk-red-light` | `#D94A5E` | SK Red pre dark mode |
+
+V dark mode sa `--paper` mení na `#0E0E10` (Ink) a Ink text sa mení na Paper `#FAFAF7`.
+
+### Hairlines
+
+| Token | Hex | Použitie |
+|---|---|---|
+| `--border` | `#E8E6DF` | Default borders, dividers (light mode) |
+| `--border-strong` | `#C9C6BC` | Aktívne borders, focus states |
+
+### Použitie v kóde
+
+```css
+/* z apps/web/styles.css */
+:root {
+  --sk-blue: #1A3B8E;
+  --sk-red: #C8243A;
+  --ink: #0E0E10;
+  --paper: #FAFAF7;
+}
+
+.btn-primary {
+  background: var(--sk-blue);
+  color: #FFFFFF;
+}
+.btn-primary:hover {
+  background: #142E72;  /* darker SK Blue */
+}
+```
+
+V Nextra docs sa SK Blue aplikuje cez `primaryHue: 225` v `theme.config.tsx` — Nextra automaticky generuje hover, accent a related farby z hue + saturation.
+
+### Pravidlá použitia farieb
+
+✅ **Robíme:**
+- SK Blue ako primárna brand farba (logo mark, CTAs, focus states, navigation active)
+- SK Red ako akcent (max 1-2 prvky na obrazovke — error, urgent notification, "kritická" akcia)
+- Ink/Paper pre základnú typografiu a pozadia
+- Trikolóra (white/SK Blue/SK Red) ako tenký 4px stripe v hlavičke alebo OG image — referencia na slovenskú vlajku
+
+❌ **Nerobíme:**
+- Primárne tlačidlo v SK Red (zarezervované pre kritické akcie)
+- Viac ako 2 SK Red prvky vo viewport-e súčasne (rozriedi to vizuálnu hierarchiu)
+- Gradient-y SK Blue ↔ SK Red bez explicitného brand dôvodu (trikolóra je výnimka)
+- Custom shades mimo definovaných tokens (žiadne ad-hoc `#1f4290` lebo "vyzerá lepšie")
+
+## Typografia
+
+### Fontové rodiny
+
+**Albert Sans** — display font pre nadpisy, wordmark, CTA tlačidlá. Letter-spacing −0.02em pre nadpisy, −1.5 px pre wordmark. Iba **váha 700**.
+
+**Geist** — body font pre všetok bežný text, formuláre, navigáciu. Váhy 400 (regular), 500 (medium), 600 (semibold). Font-feature-settings `'cv11', 'ss01', 'ss03'` pre lepšie čitateľné `i`, `l`, číslice.
+
+**Geist Mono** — monospace pre kód, ID, metadata, časy. Váhy 400, 500.
+
+### Typografická škála
+
+| Trieda | Veľkosť | Line-height | Použitie |
+|---|---|---|---|
+| H1 | 48-64px (clamp 5vw) | 1.15 | Hero, page title |
+| H2 | 36-48px | 1.15 | Major sekcie |
+| H3 | 36px | 1.15 | Section headers |
+| H4 | 28px | 1.15 | Sub-section |
+| H5 | 22px | 1.15 | Card title |
+| H6 | 18px | 1.4 | Inline emphasis |
+| Body | 16px | 1.6 | Default text |
+| Small | 14px | 1.5 | Captions, hints |
+| XS | 13px | 1.4 | Footnotes |
+
+Detail v `apps/web/styles.css` — `--fs-*` tokeny.
+
+### Slovenská diakritika
+
+<Callout type="warning">
+**Kritické:** Pri použití fontov treba zahrnúť **`latin + latin-ext`** subsety. Samotný `latin` neobsahuje slovenské `š, č, ť, ž, ľ, ň, ŕ, ĺ`. Samotný `latin-ext` neobsahuje základné `á, é, í, ó, ú, ý, ä, ô`.
+</Callout>
+
+V CSS (`@import` z Google Fonts):
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Albert+Sans:wght@700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap&subset=latin,latin-ext');
+```
+
+Pri server-side renderovaní textu (napr. OG image generovanie cez PIL) treba **mergnúť** oba subsety pomocou `fontTools`. Príklad v `tools/build-brand-assets.py`.
+
+Po mergi obsahuje **Albert Sans 700: 368 znakov**, ktoré pokrývajú celú slovenskú abecedu vrátane veľkých a malých variantov všetkých diakritických znakov.
+
+## Logo
+
+Logo activity je postavené na koncepte **Chat Stack** — tri riadky abstraktného zoznamu konverzácií, ktoré zároveň vyjadrujú tri typy komunikácie v aplikácii.
+
+### Koncept
+
+| Riadok | Typ komunikácie | Vizuálne |
+|---|---|---|
+| 1 | **1:1 priama správa** | Plný SK Blue krúžok + dva utlmené (3 účastníci, jeden aktívny) |
+| 2 | **Skupinový kanál** | SK Blue + SK Red bubble + SK Blue utlmený + Red pill (skupina s aktívnou osobou) |
+| 3 | **Broadcast** | Utlmený Ink krúžok + dlhý Ink pill (jeden vysielateľ, mnoho prijímateľov, utlmený = pasivita prijímateľov) |
+
+Wordmark **"activity"** je v Albert Sans 700 lowercase s letter-spacing −0.02em.
+
+### Varianty
+
+V `apps/web/assets/`:
+
+| Variant | Pozadie | Použitie |
+|---|---|---|
+| `logo.svg` | Light (paper) | Default — webové stránky, light mode UI, marketing materiály |
+| `logo-dark.svg` | Dark (ink) | Dark mode — UI dark theme, čierne prezentácie |
+| `logo-mono.svg` | Light (mono) | Tlač čiernobiele, low-color situácie |
+| `logo-mono-white.svg` | Dark (mono) | Inverzná tlač |
+| `logo-on-blue.svg` | SK Blue | Logo umiestnené na primárnej brand farbe (napr. footer, hero overlay) |
+| `logo-mark.svg` | Light (mark only) | Symbol bez wordmarku — favicon, app icon, kontexty s priestorovým obmedzením |
+| `logo-mark-dark.svg` | Dark (mark only) | Mark bez wordmark v dark mode |
+
+Plus PNG raster verzie pre legacy support: `logo-mark-{256,512,1024}.png`.
+
+### Clear space
+
+Minimálny voľný priestor okolo loga je **1× výška znaku "a"** vo wordmarku (alebo ekvivalentne 1× výška jedného Chat Stack riadku) zo všetkých štyroch strán.
+
+### Minimum size
+
+| Kontext | Minimum |
+|---|---|
+| Logo s wordmarkom | 24px výška |
+| Mark only (symbol) | 16px (favicon) |
+
+Pod 16px sa Chat Stack stáva nečitateľným — pre menšie kontexty použi neutral `favicon.ico` placeholder.
+
+### Favicon
+
+`apps/web/assets/favicon.svg` obsahuje **adaptívnu verziu** s `prefers-color-scheme` media query — automaticky prepína light/dark variant podľa systémových preferencií prehliadača.
+
+`apps/web/assets/favicon.ico` je **multi-resolution** (16/32/48 v jednom súbore) pre staré prehliadače a Windows.
+
+`apps/web/assets/icon-maskable-{192,512}.png` sú **Android adaptive icons** s 20% safe area padding (biely Chat Stack na SK Blue pozadí). PWA manifest ich označuje `purpose: "maskable"`.
+
+`apps/web/assets/apple-touch-icon.png` je 180×180 s paper background a mild padding.
+
+## Open Graph image
+
+`apps/web/assets/og-image.png` — 1200×630 pre social media sharing.
+
+Layout:
+- Trikolórny stripe hore (white / SK Blue / SK Red, 12px)
+- Chat Stack mark vľavo (360px)
+- Wordmark "activity" v Albert Sans 700 vpravo (168px)
+- Tagline "komunikačná platforma pre šport" v Geist Medium 36px
+- Subtitle "1:1 · skupiny · broadcast" v Geist Regular 28px (SK Blue)
+- URL `activity.sportup.sk` bottom-right v Geist Medium 22px
+- Trikolórny stripe dole (samotný SK Red)
+
+Pri zmene tagline alebo claim regenerácia cez `tools/build-brand-assets.py`.
+
+## PWA manifest
+
+`apps/web/site.webmanifest` definuje:
+
+```json
+{
+  "name": "activity",
+  "short_name": "activity",
+  "theme_color": "#1A3B8E",
+  "background_color": "#FAFAF7",
+  "display": "standalone",
+  "lang": "sk"
+}
+```
+
+Plus 5 ikon vrátane 2 maskable. Detail v [Deployment](/ops/deployment).
+
+`apps/docs/public/site.webmanifest` má ekvivalentnú štruktúru pre `docs.activity.sportup.sk` — viď [ADR-013](/adr/0013-brand-v2).
+
+## Ikonografia
+
+### UI ikony
+
+Aplikácia používa **Lucide** ikony (open-source, konzistentný štýl, dostupné cez `lucide-react`). Veľkosti:
+
+| Veľkosť | Použitie |
+|---|---|
+| 16px | Inline v texte |
+| 20px | Buttons, list items |
+| 24px | Primary actions |
+| 32px | Illustrations |
+
+### Custom ikony
+
+V `branding-source/activity-icons.html` je **32 custom UI ikon** na 24×24 mriežke (stroke 1.8px, round caps) v 4 kategóriách:
+
+- **Communication**: chat-bubble, message-direct, group-chat, broadcast, voice, video, archive, mute, search-message
+- **People**: athlete, coach, referee, medic, fan, supporter, mentor, group, role
+- **Activity & Sport**: training, match, performance, mentoring-session, calendar, timeline, achievement, evaluation
+- **Navigation & UI**: dashboard, settings, notification, filter, sort, help
+
+Tieto sú **kandidátmi** pre custom icon set. Implementácia: extrahovať z HTML do `packages/ui/icons/` keď bude balík existovať. Pre MVP postačujú Lucide ikony.
+
+## Použitie v kóde
+
+### V HTML/CSS (apps/web)
+
+```html
+<!-- v <head> -->
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#1A3B8E">
+
+<!-- v <body> -->
+<header>
+  <a href="/"><img src="/assets/logo.svg" alt="activity" height="36"></a>
+</header>
+```
+
+### V Nextra (apps/docs)
+
+`theme.config.tsx` má `<Logo />` komponent ktorý referuje `/logo.svg` z `apps/docs/public/`. Brand farby aplikované cez `primaryHue: 225` (SK Blue) a `primarySaturation`.
+
+### V Next.js (apps/platform-web, apps/platform-admin — TBD)
+
+Odporúčaný prístup keď tieto apps vzniknú:
+
+```tsx
+// app/layout.tsx
+import { Albert_Sans, Geist, Geist_Mono } from 'next/font/google';
+
+const albert = Albert_Sans({
+  weight: '700',
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-display',
+});
+
+const geist = Geist({
+  weight: ['400', '500', '600'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-sans',
+});
+
+const geistMono = Geist_Mono({
+  weight: ['400', '500'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-mono',
+});
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="sk" className={`${albert.variable} ${geist.variable} ${geistMono.variable}`}>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+CSS tokeny zdielané z `apps/web/styles.css` (kopírovať do `app/globals.css` alebo Tailwind config).
+
+## Regenerácia brand assetov
+
+Pri zmene farby, layoutu alebo ikon:
+
+```bash
+python3 tools/build-brand-assets.py
+```
+
+Skript:
+1. Stiahne fonty (Albert Sans, Geist, Geist Mono — latin + latin-ext)
+2. Mergne subsety pre plnú slovenskú diakritiku
+3. PIL natívne nakreslí Chat Stack (9 tvarov — kruhy + zaoblené obdĺžniky)
+4. Vygeneruje 19 PNG/ICO/manifest súborov
+5. Skopíruje do `apps/docs/public/`
+
+Detail v [tools/README.md](https://github.com/ltksolutions/activity/blob/main/tools/README.md).
+
+## Súvisiace zdroje
+
+- **[ADR-013](/adr/0013-brand-v2)** — rozhodnutie prečo brand v2
+- **`branding-source/`** v root-e repa — interaktívne HTML zdroje
+- **`apps/web/styles.css`** — CSS design tokens
+- **`apps/docs/theme.config.tsx`** — Nextra config s brand farbami
+- **`tools/build-brand-assets.py`** — regen skript
+
+## Otvorené otázky
+
+1. **Custom icon set vs Lucide** — pre MVP používame Lucide, ale 32 custom ikon v `activity-icons.html` je dôvod ich extrahovať do `packages/ui/icons/`. Rozhodnúť pri tvorbe `platform-web` aplikácie podľa toho, koľko z nich Lucide nepokrýva.
+
+2. **Storybook** — pre brand komponenty (Button, Badge, Logo) by sa hodilo Storybook v `packages/ui`. Plánované s tvorbou prvého shared komponentu.
+
+3. **Brand pre prezentácie** — aktuálne nemáme šablóny pre Keynote/Slides. Pri prvej veľkej prezentácii vytvoriť `branding-source/presentation-template.key` (Keynote) alebo Google Slides template.

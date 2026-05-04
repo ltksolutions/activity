@@ -28,7 +28,7 @@ Repo: **[github.com/ltksolutions/activity](https://github.com/ltksolutions/activ
 | Operácie (deployment, retencia, GDPR) | ✅ Návrh | [docs.activity.sportup.sk/ops](https://docs.activity.sportup.sk/ops/deployment) |
 | Integrácia s sportup.sk | ✅ Návrh | [docs.activity.sportup.sk/sportup-sk-integration](https://docs.activity.sportup.sk/sportup-sk-integration) |
 | Marketing web | ✅ Live | [activity.sportup.sk](https://activity.sportup.sk) |
-| Branding (logo, farby, favicon, OG) | ✅ Hotové | `apps/web/assets/`, `apps/docs/public/` |
+| Branding (logo, farby, favicon, OG, brand manuál, ADR-013) | ✅ Hotové | `apps/web/assets/`, `apps/docs/public/`, `branding-source/`, [docs/ui/brand](https://docs.activity.sportup.sk/ui/brand) |
 | **Architecture Decision Records (ADR)** | ✅ Hotové | [docs.activity.sportup.sk/adr](https://docs.activity.sportup.sk/adr) |
 | **Otvorené otázky pre seniora** | ✅ Hotové | [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) |
 
@@ -63,6 +63,7 @@ Tieto rozhodnutia padli, otvorenie ich znova by stratilo prácu. Sú podložené
 - **Hybrid mirror** s sportup.sk: identitné polia mirror, aplikačné polia lokálne — [ADR-010](https://docs.activity.sportup.sk/adr/0010-sportup-mirror)
 - **SSE + Redis Pub/Sub** pre real-time delivery (nie WebSocket, nie Change Streams) — [ADR-011](https://docs.activity.sportup.sk/adr/0011-sse-realtime)
 - **Vercel** zostáva pre Next.js apps, nie ideme na Google ani inú cloud — [ADR-012](https://docs.activity.sportup.sk/adr/0012-vercel-stays)
+- **Brand v2** (SK Blue/Red, Chat Stack, Albert Sans + Geist) — [ADR-013](https://docs.activity.sportup.sk/adr/0013-brand-v2)
 
 ## Čo ja **neviem**, čo musíš ty
 

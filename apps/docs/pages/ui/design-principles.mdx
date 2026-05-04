@@ -104,48 +104,52 @@ V praxi:
 
 ## Vizuálny systém
 
+Kompletný brand manuál je v [brand](brand) — farby, typografia, logo, ikonografia, použitie. Tu len krátky prehľad pre kontext dizajnových princípov.
+
 ### Typografia
 
-Pre web aplikáciu používame **dve fontové rodiny**:
+Aplikácia používa **tri fontové rodiny**:
 
-- **Headlines, navigation**: san-serif geometrický (napr. Inter, Manrope)
-- **Body text, forms**: san-serif humanistický (napr. Inter)
+- **Albert Sans 700** — display font pre nadpisy, wordmark, CTA tlačidlá
+- **Geist 400/500/600** — body font pre bežný text, formuláre, navigáciu
+- **Geist Mono 400/500** — monospace pre kód, ID, metadata
 
-V Nextra (docs.activity.sportup.sk) môže byť odlišný dizajn pre dokumentačné účely.
+Pre slovenskú diakritiku treba zahrnúť **`latin + latin-ext`** subsety. Detail v [brand](brand#slovenská-diakritika).
 
 Hierarchia veľkostí:
 
 ```
-H1: 32px / 40px line-height
-H2: 24px / 32px
-H3: 20px / 28px
-H4: 18px / 24px
-Body: 16px / 24px
-Small: 14px / 20px
-Caption: 12px / 16px
+H1: 48-64px / 1.15 line-height
+H2: 36-48px / 1.15
+H3: 36px    / 1.15
+H4: 28px    / 1.15
+Body: 16px  / 1.6
+Small: 14px / 1.5
+Caption: 13px / 1.4
 ```
 
 ### Farby
 
-Branding (logo, accent farby) sa preberá z **Design manuálu pre sportup.sk** projekt — viď [../README](/README) a Nextra setup.
+Brand v2 používa **slovenskú národnú farebnosť** — SK Blue ako primárna, SK Red ako akcent. Plný popis vrátane HSL hodnôt, dark mode variantov a pravidiel použitia v [brand](brand#farebná-paleta).
 
-Sémantické farby:
+Sémantické farby pre UI stavy:
 
 ```
-Primary: brand color (z manuálu)
-Success: green (action complete, valid state)
-Warning: orange (editable for limited time, attention)
-Danger: red (destructive, error state)
-Info: blue (informational hint)
+Primary:   --sk-blue   (#1A3B8E)  brand color, CTAs, focus
+Accent:    --sk-red    (#C8243A)  notifications, urgent, error
+Success:   green                  action complete, valid state
+Warning:   orange                 editable for limited time, attention
+Danger:    --sk-red               destructive, error state
+Info:      blue                   informational hint
 
-Neutral 100: nearly white (backgrounds)
-Neutral 200: light gray (borders, dividers)
-Neutral 500: medium gray (icons, secondary text)
-Neutral 800: dark gray (body text)
-Neutral 950: nearly black (headlines)
+Neutral 100: --paper      backgrounds (light)
+Neutral 200: --border     borders, dividers
+Neutral 500: medium gray  icons, secondary text
+Neutral 800: --ink-soft   body text
+Neutral 950: --ink        headlines
 ```
 
-Dark mode má samostatné odtiene, ale rovnakú sémantiku.
+Dark mode má samostatné odtiene (`--sk-blue-light`, `--sk-red-light`, Ink ↔ Paper swap), ale rovnakú sémantiku.
 
 ### Grid a spacing
 
@@ -159,12 +163,14 @@ Common spacing:
 
 ### Iconography
 
-Lucide ikony (open source, konzistentný štýl). Velikosti:
+Lucide ikony (open source, konzistentný štýl). Veľkosti:
 
 - 16px — inline v texte
 - 20px — buttons, list items
 - 24px — primary actions
 - 32px — illustrations
+
+V `branding-source/activity-icons.html` je 32 **custom UI ikon** ako kandidáti pre prípadný vlastný icon set v `packages/ui/icons/`. Pre MVP postačujú Lucide ikony — pozri [brand](brand#ikonografia).
 
 ### Komponenty
 
@@ -427,5 +433,6 @@ Tooltipy *"Toto je novinka v X.Y.0"* po veľkých zmenách.
 
 ## Nasleduje
 
+Pre kompletný brand manuál pokračuj v [brand](brand).
 Pre konkrétne mockupy pokračuj v [mockups](mockups).
-Pre architektúru pokračuj v [../01-architecture](/architecture).
+Pre architektúru pokračuj v [../architecture](/architecture).

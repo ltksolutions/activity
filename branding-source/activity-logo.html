@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<title>activity — final logo · D Chat Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Albert+Sans:wght@400;500;600;700&display=swap">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #f0eee9; font-family: 'Geist', system-ui, sans-serif; }
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image: linear-gradient(to right,rgba(0,0,0,0.04) 1px,transparent 1px), linear-gradient(to bottom,rgba(0,0,0,0.04) 1px,transparent 1px);
+  background-size: 28px 28px;
+}
+.page { position:relative; z-index:1; max-width:1280px; margin:0 auto; padding:64px 48px 120px; }
+.page-header { margin-bottom:72px; }
+.page-header h1 { font-family:'Geist Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:rgba(0,0,0,0.45); margin-bottom:8px; }
+.section { margin-bottom:80px; }
+.section-title { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(0,0,0,0.4); margin-bottom:20px; }
+.row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.card { background:#fafaf7; border-radius:12px; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center; }
+.card.dark { background:#0e0e10; }
+.card.warm { background:#f5f3ed; }
+.card.blue { background:#1a3b8e; }
+.cap { position:absolute; bottom:14px; left:16px; font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(0,0,0,0.35); }
+.cap.on-dark { color:rgba(255,255,255,0.35); }
+.export-box { background:#fafaf7; border:1px solid #e8e6df; border-radius:12px; padding:24px 28px; display:flex; flex-direction:column; gap:12px; }
+.export-title { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(0,0,0,0.45); }
+.export-code { font-family:'Geist Mono',monospace; font-size:11px; line-height:1.7; color:#2a2a2e; background:#f0eee9; border-radius:6px; padding:16px 18px; white-space:pre; overflow-x:auto; user-select:all; }
+.copy-btn { align-self:flex-start; font-family:'Geist',system-ui,sans-serif; font-size:12px; font-weight:500; background:#0e0e10; color:#fafaf7; border:none; cursor:pointer; padding:8px 18px; border-radius:999px; transition:opacity 0.15s; }
+.copy-btn:hover { opacity:0.75; }
+.chip-row { display:flex; align-items:center; gap:12px; }
+.chip { width:34px; height:34px; border-radius:8px; flex-shrink:0; }
+.chip-name { font-size:12px; font-weight:500; color:#0e0e10; }
+.chip-hex { font-family:'Geist Mono',monospace; font-size:11px; color:rgba(0,0,0,0.5); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <h1>activity · Final Logo · D · Chat Stack</h1>
+    <p style="font-size:13px; color:rgba(0,0,0,0.5); margin-top:4px;">Abstraktný zoznam konverzácií — 1:1, skupina, broadcast. Slovak tricolour, lowercase wordmark.</p>
+  </div>
+
+  <!-- 01 HERO ─────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">01 · Primary lockup · horizontal</div>
+    <div class="row">
+      <div class="card" style="width:100%; height:360px;">
+        <!-- Mark: 3 rows of avatar dots + pill bars -->
+        <svg width="500" height="100" viewBox="0 0 500 100" fill="none" id="svg-hero">
+          <!-- Row 1: 1:1 (two blue dots + bar) -->
+          <circle cx="14" cy="22" r="9" fill="#1a3b8e"/>
+          <circle cx="30" cy="22" r="9" fill="#1a3b8e" fill-opacity="0.38"/>
+          <rect x="46" y="16" width="28" height="12" rx="6" fill="#1a3b8e" fill-opacity="0.18"/>
+
+          <!-- Row 2: group (three dots: blue, red, blue-soft) + bar -->
+          <circle cx="14" cy="50" r="9" fill="#1a3b8e"/>
+          <circle cx="28" cy="50" r="9" fill="#c8243a" fill-opacity="0.75"/>
+          <circle cx="42" cy="50" r="9" fill="#1a3b8e" fill-opacity="0.32"/>
+          <rect x="58" y="44" width="18" height="12" rx="6" fill="#c8243a" fill-opacity="0.18"/>
+
+          <!-- Row 3: broadcast (single muted dot + long bar) -->
+          <circle cx="14" cy="78" r="9" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="30" y="72" width="44" height="12" rx="6" fill="#0e0e10" fill-opacity="0.1"/>
+
+          <!-- Wordmark -->
+          <text x="118" y="70" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="56" letter-spacing="-2" fill="#0e0e10">activity</text>
+        </svg>
+        <span class="cap">Primary · Light background</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 ANATOMY ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">02 · Mark construction + colours + typography</div>
+    <div class="row">
+      <!-- Construction -->
+      <div class="card warm" style="width:340px; height:360px; flex-direction:column; gap:0; align-items:center; justify-content:center;">
+        <svg width="200" height="240" viewBox="0 0 200 240" fill="none">
+          <!-- grid -->
+          <line x1="0" y1="40"  x2="200" y2="40"  stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+          <line x1="0" y1="120" x2="200" y2="120" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+          <line x1="0" y1="200" x2="200" y2="200" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+          <line x1="40"  y1="0" x2="40"  y2="240" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+
+          <!-- annotation lines -->
+          <line x1="8" y1="5" x2="8" y2="35" stroke="#c8243a" stroke-opacity="0.3" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="12" y="24" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.35)">∅ 18u</text>
+
+          <!-- Row 1: 1:1 -->
+          <circle cx="22" cy="54" r="18" fill="#1a3b8e"/>
+          <circle cx="54" cy="54" r="18" fill="#1a3b8e" fill-opacity="0.38"/>
+          <rect x="78" y="42" width="40" height="24" rx="12" fill="#1a3b8e" fill-opacity="0.18"/>
+          <text x="78" y="86" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.35)">1:1</text>
+
+          <!-- Row 2: group -->
+          <circle cx="22"  cy="134" r="18" fill="#1a3b8e"/>
+          <circle cx="52"  cy="134" r="18" fill="#c8243a" fill-opacity="0.75"/>
+          <circle cx="82"  cy="134" r="18" fill="#1a3b8e" fill-opacity="0.32"/>
+          <rect x="106" y="122" width="30" height="24" rx="12" fill="#c8243a" fill-opacity="0.18"/>
+          <text x="106" y="166" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.35)">group</text>
+
+          <!-- Row 3: broadcast -->
+          <circle cx="22" cy="210" r="18" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="48" y="198" width="80" height="24" rx="12" fill="#0e0e10" fill-opacity="0.1"/>
+          <text x="48" y="242" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.35)">broadcast</text>
+        </svg>
+        <span class="cap">Construction / anatomy</span>
+      </div>
+
+      <!-- Colours + type -->
+      <div class="card" style="flex:1; height:360px; align-items:stretch; justify-content:flex-start; padding:40px;">
+        <div style="display:flex; flex-direction:column; gap:28px;">
+          <div>
+            <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(0,0,0,0.4); margin-bottom:12px;">Wordmark</div>
+            <div style="font-family:'Albert Sans',system-ui,sans-serif; font-weight:700; font-size:44px; letter-spacing:-0.03em; color:#0e0e10; line-height:1;">activity</div>
+            <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(0,0,0,0.4); margin-top:8px;">Albert Sans · 700 · −0.03em</div>
+          </div>
+          <div style="width:100%; height:1px; background:#e8e6df;"></div>
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            {[
+              { hex:'#1A3B8E', name:'SK Blue',  border:false },
+              { hex:'#C8243A', name:'SK Red',   border:false },
+              { hex:'#0E0E10', name:'Ink',      border:false },
+              { hex:'#FAFAF7', name:'Paper',    border:true  },
+            ].map(s => (
+              <div key={s.hex} class="chip-row">
+                <div class="chip" style={`background:${s.hex};${s.border?' border:1px solid #e8e6df;':''}`}></div>
+                <div>
+                  <div class="chip-name">{s.name}</div>
+                  <div class="chip-hex">{s.hex}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Symbol large -->
+      <div class="card" style="width:280px; height:360px;">
+        <svg width="140" height="160" viewBox="0 0 140 160" fill="none">
+          <!-- Row 1 -->
+          <circle cx="22" cy="28" r="16" fill="#1a3b8e"/>
+          <circle cx="52" cy="28" r="16" fill="#1a3b8e" fill-opacity="0.38"/>
+          <rect x="74" y="18" width="36" height="20" rx="10" fill="#1a3b8e" fill-opacity="0.18"/>
+          <!-- Row 2 -->
+          <circle cx="22" cy="80" r="16" fill="#1a3b8e"/>
+          <circle cx="48" cy="80" r="16" fill="#c8243a" fill-opacity="0.75"/>
+          <circle cx="74" cy="80" r="16" fill="#1a3b8e" fill-opacity="0.32"/>
+          <rect x="96" y="70" width="26" height="20" rx="10" fill="#c8243a" fill-opacity="0.18"/>
+          <!-- Row 3 -->
+          <circle cx="22" cy="132" r="16" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="44" y="122" width="72" height="20" rx="10" fill="#0e0e10" fill-opacity="0.1"/>
+        </svg>
+        <span class="cap">Symbol · 2×</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 VERTICAL ────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">03 · Vertical lockup</div>
+    <div class="row">
+      <div class="card" style="width:300px; height:280px; flex-direction:column; gap:20px;">
+        <svg width="90" height="100" viewBox="0 0 90 100" fill="none">
+          <circle cx="14" cy="16" r="11" fill="#1a3b8e"/>
+          <circle cx="34" cy="16" r="11" fill="#1a3b8e" fill-opacity="0.38"/>
+          <rect x="50" y="9" width="24" height="14" rx="7" fill="#1a3b8e" fill-opacity="0.18"/>
+          <circle cx="14" cy="50" r="11" fill="#1a3b8e"/>
+          <circle cx="30" cy="50" r="11" fill="#c8243a" fill-opacity="0.75"/>
+          <circle cx="46" cy="50" r="11" fill="#1a3b8e" fill-opacity="0.32"/>
+          <rect x="62" y="43" width="16" height="14" rx="7" fill="#c8243a" fill-opacity="0.18"/>
+          <circle cx="14" cy="84" r="11" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="30" y="77" width="50" height="14" rx="7" fill="#0e0e10" fill-opacity="0.1"/>
+        </svg>
+        <span style="font-family:'Albert Sans',system-ui,sans-serif; font-weight:700; font-size:26px; letter-spacing:-0.03em; color:#0e0e10;">activity</span>
+        <span class="cap">Vertical · Light</span>
+      </div>
+      <div class="card dark" style="width:300px; height:280px; flex-direction:column; gap:20px;">
+        <svg width="90" height="100" viewBox="0 0 90 100" fill="none">
+          <circle cx="14" cy="16" r="11" fill="#4a6dc4"/>
+          <circle cx="34" cy="16" r="11" fill="#4a6dc4" fill-opacity="0.4"/>
+          <rect x="50" y="9" width="24" height="14" rx="7" fill="#4a6dc4" fill-opacity="0.22"/>
+          <circle cx="14" cy="50" r="11" fill="#4a6dc4"/>
+          <circle cx="30" cy="50" r="11" fill="#d94a5e" fill-opacity="0.8"/>
+          <circle cx="46" cy="50" r="11" fill="#4a6dc4" fill-opacity="0.35"/>
+          <rect x="62" y="43" width="16" height="14" rx="7" fill="#d94a5e" fill-opacity="0.2"/>
+          <circle cx="14" cy="84" r="11" fill="#fafaf7" fill-opacity="0.2"/>
+          <rect x="30" y="77" width="50" height="14" rx="7" fill="#fafaf7" fill-opacity="0.1"/>
+        </svg>
+        <span style="font-family:'Albert Sans',system-ui,sans-serif; font-weight:700; font-size:26px; letter-spacing:-0.03em; color:#fafaf7;">activity</span>
+        <span class="cap on-dark">Vertical · Dark</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 MONO ────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">04 · Monochrome</div>
+    <div class="row">
+      <div class="card" style="flex:1; height:220px;">
+        <svg width="340" height="80" viewBox="0 0 340 80" fill="none">
+          <circle cx="12" cy="17" r="8" fill="#0e0e10"/>
+          <circle cx="27" cy="17" r="8" fill="#0e0e10" fill-opacity="0.38"/>
+          <rect x="40" y="11" width="22" height="12" rx="6" fill="#0e0e10" fill-opacity="0.18"/>
+          <circle cx="12" cy="40" r="8" fill="#0e0e10"/>
+          <circle cx="25" cy="40" r="8" fill="#0e0e10" fill-opacity="0.58"/>
+          <circle cx="38" cy="40" r="8" fill="#0e0e10" fill-opacity="0.28"/>
+          <rect x="51" y="34" width="14" height="12" rx="6" fill="#0e0e10" fill-opacity="0.18"/>
+          <circle cx="12" cy="63" r="8" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="26" y="57" width="40" height="12" rx="6" fill="#0e0e10" fill-opacity="0.12"/>
+          <text x="84" y="55" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="38" letter-spacing="-1.2" fill="#0e0e10">activity</text>
+        </svg>
+        <span class="cap">Mono · Black</span>
+      </div>
+      <div class="card dark" style="flex:1; height:220px;">
+        <svg width="340" height="80" viewBox="0 0 340 80" fill="none">
+          <circle cx="12" cy="17" r="8" fill="#fafaf7"/>
+          <circle cx="27" cy="17" r="8" fill="#fafaf7" fill-opacity="0.38"/>
+          <rect x="40" y="11" width="22" height="12" rx="6" fill="#fafaf7" fill-opacity="0.18"/>
+          <circle cx="12" cy="40" r="8" fill="#fafaf7"/>
+          <circle cx="25" cy="40" r="8" fill="#fafaf7" fill-opacity="0.58"/>
+          <circle cx="38" cy="40" r="8" fill="#fafaf7" fill-opacity="0.28"/>
+          <rect x="51" y="34" width="14" height="12" rx="6" fill="#fafaf7" fill-opacity="0.18"/>
+          <circle cx="12" cy="63" r="8" fill="#fafaf7" fill-opacity="0.22"/>
+          <rect x="26" y="57" width="40" height="12" rx="6" fill="#fafaf7" fill-opacity="0.12"/>
+          <text x="84" y="55" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="38" letter-spacing="-1.2" fill="#fafaf7">activity</text>
+        </svg>
+        <span class="cap on-dark">Mono · White</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 COLOUR APPS ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">05 · Colour applications</div>
+    <div class="row">
+      <div class="card" style="flex:1; height:200px;">
+        <svg width="280" height="68" viewBox="0 0 280 68" fill="none">
+          <circle cx="10" cy="13" r="7" fill="#1a3b8e"/>
+          <circle cx="23" cy="13" r="7" fill="#1a3b8e" fill-opacity="0.38"/>
+          <rect x="35" y="8"  width="18" height="10" rx="5" fill="#1a3b8e" fill-opacity="0.18"/>
+          <circle cx="10" cy="34" r="7" fill="#1a3b8e"/>
+          <circle cx="21" cy="34" r="7" fill="#c8243a" fill-opacity="0.75"/>
+          <circle cx="32" cy="34" r="7" fill="#1a3b8e" fill-opacity="0.32"/>
+          <rect x="44" y="29" width="12" height="10" rx="5" fill="#c8243a" fill-opacity="0.18"/>
+          <circle cx="10" cy="55" r="7" fill="#0e0e10" fill-opacity="0.22"/>
+          <rect x="22" y="50" width="34" height="10" rx="5" fill="#0e0e10" fill-opacity="0.1"/>
+          <text x="72" y="47" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="34" letter-spacing="-1" fill="#0e0e10">activity</text>
+        </svg>
+        <span class="cap">Light mode</span>
+      </div>
+      <div class="card dark" style="flex:1; height:200px;">
+        <svg width="280" height="68" viewBox="0 0 280 68" fill="none">
+          <circle cx="10" cy="13" r="7" fill="#4a6dc4"/>
+          <circle cx="23" cy="13" r="7" fill="#4a6dc4" fill-opacity="0.4"/>
+          <rect x="35" y="8"  width="18" height="10" rx="5" fill="#4a6dc4" fill-opacity="0.22"/>
+          <circle cx="10" cy="34" r="7" fill="#4a6dc4"/>
+          <circle cx="21" cy="34" r="7" fill="#d94a5e" fill-opacity="0.8"/>
+          <circle cx="32" cy="34" r="7" fill="#4a6dc4" fill-opacity="0.35"/>
+          <rect x="44" y="29" width="12" height="10" rx="5" fill="#d94a5e" fill-opacity="0.2"/>
+          <circle cx="10" cy="55" r="7" fill="#fafaf7" fill-opacity="0.2"/>
+          <rect x="22" y="50" width="34" height="10" rx="5" fill="#fafaf7" fill-opacity="0.1"/>
+          <text x="72" y="47" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="34" letter-spacing="-1" fill="#fafaf7">activity</text>
+        </svg>
+        <span class="cap on-dark">Dark mode</span>
+      </div>
+      <div class="card blue" style="width:260px; height:200px;">
+        <svg width="240" height="68" viewBox="0 0 240 68" fill="none">
+          <circle cx="10" cy="13" r="7" fill="#fafaf7"/>
+          <circle cx="23" cy="13" r="7" fill="#fafaf7" fill-opacity="0.45"/>
+          <rect x="35" y="8"  width="18" height="10" rx="5" fill="#fafaf7" fill-opacity="0.22"/>
+          <circle cx="10" cy="34" r="7" fill="#fafaf7"/>
+          <circle cx="21" cy="34" r="7" fill="#fafaf7" fill-opacity="0.65"/>
+          <circle cx="32" cy="34" r="7" fill="#fafaf7" fill-opacity="0.35"/>
+          <rect x="44" y="29" width="12" height="10" rx="5" fill="#fafaf7" fill-opacity="0.2"/>
+          <circle cx="10" cy="55" r="7" fill="#fafaf7" fill-opacity="0.2"/>
+          <rect x="22" y="50" width="34" height="10" rx="5" fill="#fafaf7" fill-opacity="0.12"/>
+          <text x="72" y="47" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="34" letter-spacing="-1" fill="#fafaf7">activity</text>
+        </svg>
+        <span class="cap on-dark">On brand blue</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 06 APP ICONS ────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">06 · App icons · favicon</div>
+    <div class="row">
+      <div class="card warm" style="flex:1; height:280px; flex-direction:row; gap:24px;">
+        <!-- iOS large -->
+        <div style="width:156px; height:156px; background:#fafaf7; border-radius:35px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 32px rgba(0,0,0,0.09);">
+          <svg width="88" height="100" viewBox="0 0 88 100" fill="none">
+            <circle cx="13" cy="16" r="10" fill="#1a3b8e"/>
+            <circle cx="32" cy="16" r="10" fill="#1a3b8e" fill-opacity="0.38"/>
+            <rect x="47" y="10" width="22" height="13" rx="6.5" fill="#1a3b8e" fill-opacity="0.18"/>
+            <circle cx="13" cy="50" r="10" fill="#1a3b8e"/>
+            <circle cx="28" cy="50" r="10" fill="#c8243a" fill-opacity="0.75"/>
+            <circle cx="43" cy="50" r="10" fill="#1a3b8e" fill-opacity="0.32"/>
+            <rect x="58" y="44" width="15" height="13" rx="6.5" fill="#c8243a" fill-opacity="0.18"/>
+            <circle cx="13" cy="84" r="10" fill="#0e0e10" fill-opacity="0.22"/>
+            <rect x="29" y="78" width="50" height="13" rx="6.5" fill="#0e0e10" fill-opacity="0.1"/>
+          </svg>
+        </div>
+        <!-- Dark mid -->
+        <div style="width:106px; height:106px; background:#0e0e10; border-radius:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 20px rgba(0,0,0,0.15);">
+          <svg width="60" height="68" viewBox="0 0 60 68" fill="none">
+            <circle cx="9"  cy="11" r="7" fill="#4a6dc4"/>
+            <circle cx="22" cy="11" r="7" fill="#4a6dc4" fill-opacity="0.4"/>
+            <rect x="33" y="7"  width="16" height="9" rx="4.5" fill="#4a6dc4" fill-opacity="0.22"/>
+            <circle cx="9"  cy="34" r="7" fill="#4a6dc4"/>
+            <circle cx="20" cy="34" r="7" fill="#d94a5e" fill-opacity="0.8"/>
+            <circle cx="31" cy="34" r="7" fill="#4a6dc4" fill-opacity="0.35"/>
+            <rect x="42" y="30" width="10" height="9" rx="4.5" fill="#d94a5e" fill-opacity="0.2"/>
+            <circle cx="9"  cy="57" r="7" fill="#fafaf7" fill-opacity="0.2"/>
+            <rect x="21" y="53" width="35" height="9" rx="4.5" fill="#fafaf7" fill-opacity="0.1"/>
+          </svg>
+        </div>
+        <!-- Blue small -->
+        <div style="width:72px; height:72px; background:#1a3b8e; border-radius:16px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(26,59,142,0.3);">
+          <svg width="40" height="46" viewBox="0 0 40 46" fill="none">
+            <circle cx="6"  cy="8"  r="5" fill="#fafaf7"/>
+            <circle cx="16" cy="8"  r="5" fill="#fafaf7" fill-opacity="0.4"/>
+            <rect x="24" y="5"  width="12" height="7" rx="3.5" fill="#fafaf7" fill-opacity="0.22"/>
+            <circle cx="6"  cy="23" r="5" fill="#fafaf7"/>
+            <circle cx="14" cy="23" r="5" fill="#fafaf7" fill-opacity="0.65"/>
+            <circle cx="22" cy="23" r="5" fill="#fafaf7" fill-opacity="0.32"/>
+            <circle cx="6"  cy="38" r="5" fill="#fafaf7" fill-opacity="0.2"/>
+            <rect x="14" y="35" width="24" height="7" rx="3.5" fill="#fafaf7" fill-opacity="0.12"/>
+          </svg>
+        </div>
+        <!-- Favicon 32px -->
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <div style="width:32px; height:32px; background:#fafaf7; border-radius:6px; display:flex; align-items:center; justify-content:center; border:1px solid #e8e6df;">
+            <svg width="20" height="22" viewBox="0 0 20 22" fill="none">
+              <circle cx="4"  cy="4"  r="3.5" fill="#1a3b8e"/>
+              <circle cx="11" cy="4"  r="3.5" fill="#1a3b8e" fill-opacity="0.4"/>
+              <circle cx="4"  cy="11" r="3.5" fill="#1a3b8e"/>
+              <circle cx="10" cy="11" r="3.5" fill="#c8243a" fill-opacity="0.75"/>
+              <circle cx="16" cy="11" r="3.5" fill="#1a3b8e" fill-opacity="0.3"/>
+              <circle cx="4"  cy="18" r="3.5" fill="#0e0e10" fill-opacity="0.22"/>
+              <rect x="10" y="15" width="9"  height="6" rx="3" fill="#0e0e10" fill-opacity="0.1"/>
+            </svg>
+          </div>
+          <span style="font-family:'Geist Mono',monospace; font-size:9px; color:rgba(0,0,0,0.4); letter-spacing:0.05em;">32px</span>
+        </div>
+        <span class="cap">iOS · Android · Favicon</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 07 HEADER MOCK ──────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">07 · UI application · header</div>
+    <div class="row">
+      <div class="card" style="width:100%; height:380px; flex-direction:column; align-items:stretch; justify-content:flex-start; padding:0;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 32px; border-bottom:1px solid #e8e6df; background:#fafaf7;">
+          <svg width="196" height="44" viewBox="0 0 196 44" fill="none">
+            <circle cx="8"  cy="10" r="6.5" fill="#1a3b8e"/>
+            <circle cx="20" cy="10" r="6.5" fill="#1a3b8e" fill-opacity="0.38"/>
+            <rect x="30" y="6"  width="14" height="9" rx="4.5" fill="#1a3b8e" fill-opacity="0.18"/>
+            <circle cx="8"  cy="26" r="6.5" fill="#1a3b8e"/>
+            <circle cx="18" cy="26" r="6.5" fill="#c8243a" fill-opacity="0.75"/>
+            <circle cx="28" cy="26" r="6.5" fill="#1a3b8e" fill-opacity="0.32"/>
+            <rect x="38" y="22" width="10" height="9" rx="4.5" fill="#c8243a" fill-opacity="0.18"/>
+            <circle cx="8"  cy="38" r="6.5" fill="#0e0e10" fill-opacity="0.22"/>
+            <rect x="20" y="34" width="28" height="9" rx="4.5" fill="#0e0e10" fill-opacity="0.1"/>
+            <text x="56" y="31" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="22" letter-spacing="-0.6" fill="#0e0e10">activity</text>
+          </svg>
+          <div style="display:flex; align-items:center; gap:28px; font-size:13px; color:rgba(0,0,0,0.6);">
+            <span>Správy</span>
+            <span>Skupiny</span>
+            <span>Aktivity</span>
+            <span>Pre koho</span>
+            <div style="background:#0e0e10; color:#fafaf7; padding:8px 18px; border-radius:999px; font-size:12px; font-weight:500;">Prihlásiť sa</div>
+          </div>
+        </div>
+        <div style="padding:48px 48px 36px; display:flex; flex-direction:column; gap:16px;">
+          <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(0,0,0,0.4);">Platforma sportup.sk</div>
+          <div style="font-family:'Albert Sans',system-ui,sans-serif; font-size:38px; font-weight:700; letter-spacing:-0.03em; line-height:1.05; color:#0e0e10; text-wrap:pretty; max-width:560px;">
+            Komunikácia 1:1 a v skupinách pre slovenský šport
+          </div>
+          <div style="font-size:14px; line-height:1.6; color:rgba(0,0,0,0.6); max-width:460px;">
+            Tréner píše atletovi. Tím sa baví v skupinovom kanáli. Všetko na jednom mieste.
+          </div>
+        </div>
+        <span class="cap">Header in UI</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 08 SVG EXPORT ───────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">08 · SVG export</div>
+    <div style="display:flex; flex-direction:column; gap:20px;">
+
+      <div class="export-box">
+        <div class="export-title">Primary · Horizontal · Colour</div>
+        <div class="export-code" id="svg-primary">&lt;svg width="400" height="90" viewBox="0 0 400 90" fill="none" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;!-- Row 1: 1:1 --&gt;
+  &lt;circle cx="13" cy="20" r="10" fill="#1A3B8E"/&gt;
+  &lt;circle cx="29" cy="20" r="10" fill="#1A3B8E" fill-opacity="0.38"/&gt;
+  &lt;rect x="44" y="13" width="24" height="14" rx="7" fill="#1A3B8E" fill-opacity="0.18"/&gt;
+  &lt;!-- Row 2: group --&gt;
+  &lt;circle cx="13" cy="50" r="10" fill="#1A3B8E"/&gt;
+  &lt;circle cx="27" cy="50" r="10" fill="#C8243A" fill-opacity="0.75"/&gt;
+  &lt;circle cx="41" cy="50" r="10" fill="#1A3B8E" fill-opacity="0.32"/&gt;
+  &lt;rect x="56" y="43" width="16" height="14" rx="7" fill="#C8243A" fill-opacity="0.18"/&gt;
+  &lt;!-- Row 3: broadcast --&gt;
+  &lt;circle cx="13" cy="78" r="10" fill="#0E0E10" fill-opacity="0.22"/&gt;
+  &lt;rect x="29" y="71" width="48" height="14" rx="7" fill="#0E0E10" fill-opacity="0.1"/&gt;
+  &lt;!-- Wordmark --&gt;
+  &lt;text x="96" y="63" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="46" letter-spacing="-1.5" fill="#0E0E10"&gt;activity&lt;/text&gt;
+&lt;/svg&gt;</div>
+        <button class="copy-btn" onclick="copyCode('svg-primary',this)">Kopírovať SVG</button>
+      </div>
+
+      <div class="export-box">
+        <div class="export-title">Symbol only · Colour</div>
+        <div class="export-code" id="svg-symbol">&lt;svg width="90" height="100" viewBox="0 0 90 100" fill="none" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;circle cx="14" cy="16" r="11" fill="#1A3B8E"/&gt;
+  &lt;circle cx="34" cy="16" r="11" fill="#1A3B8E" fill-opacity="0.38"/&gt;
+  &lt;rect x="50" y="9" width="26" height="15" rx="7.5" fill="#1A3B8E" fill-opacity="0.18"/&gt;
+  &lt;circle cx="14" cy="50" r="11" fill="#1A3B8E"/&gt;
+  &lt;circle cx="30" cy="50" r="11" fill="#C8243A" fill-opacity="0.75"/&gt;
+  &lt;circle cx="46" cy="50" r="11" fill="#1A3B8E" fill-opacity="0.32"/&gt;
+  &lt;rect x="62" y="43" width="18" height="15" rx="7.5" fill="#C8243A" fill-opacity="0.18"/&gt;
+  &lt;circle cx="14" cy="84" r="11" fill="#0E0E10" fill-opacity="0.22"/&gt;
+  &lt;rect x="30" y="77" width="52" height="15" rx="7.5" fill="#0E0E10" fill-opacity="0.1"/&gt;
+&lt;/svg&gt;</div>
+        <button class="copy-btn" onclick="copyCode('svg-symbol',this)">Kopírovať SVG</button>
+      </div>
+
+      <div class="export-box">
+        <div class="export-title">Primary · Mono black</div>
+        <div class="export-code" id="svg-mono">&lt;svg width="400" height="90" viewBox="0 0 400 90" fill="none" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;circle cx="13" cy="20" r="10" fill="#0E0E10"/&gt;
+  &lt;circle cx="29" cy="20" r="10" fill="#0E0E10" fill-opacity="0.38"/&gt;
+  &lt;rect x="44" y="13" width="24" height="14" rx="7" fill="#0E0E10" fill-opacity="0.18"/&gt;
+  &lt;circle cx="13" cy="50" r="10" fill="#0E0E10"/&gt;
+  &lt;circle cx="27" cy="50" r="10" fill="#0E0E10" fill-opacity="0.58"/&gt;
+  &lt;circle cx="41" cy="50" r="10" fill="#0E0E10" fill-opacity="0.28"/&gt;
+  &lt;rect x="56" y="43" width="16" height="14" rx="7" fill="#0E0E10" fill-opacity="0.18"/&gt;
+  &lt;circle cx="13" cy="78" r="10" fill="#0E0E10" fill-opacity="0.22"/&gt;
+  &lt;rect x="29" y="71" width="48" height="14" rx="7" fill="#0E0E10" fill-opacity="0.1"/&gt;
+  &lt;text x="96" y="63" font-family="'Albert Sans', sans-serif" font-weight="700" font-size="46" letter-spacing="-1.5" fill="#0E0E10"&gt;activity&lt;/text&gt;
+&lt;/svg&gt;</div>
+        <button class="copy-btn" onclick="copyCode('svg-mono',this)">Kopírovať SVG</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+<script>
+function copyCode(id, btn) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => {
+    btn.textContent = '✓ Skopírované';
+    setTimeout(() => btn.textContent = 'Kopírovať SVG', 2000);
+  });
+}
+</script>
+</body>
+</html>

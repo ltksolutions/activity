@@ -12,6 +12,7 @@
   "0010-sportup-mirror": "ADR-010 · Hybrid mirror sportup.sk",
   "0011-sse-realtime": "ADR-011 · SSE pre real-time",
   "0012-vercel-stays": "ADR-012 · Vercel zostáva",
+  "0013-brand-v2": "ADR-013 · Brand v2 (Chat Stack, SK Blue/Red)",
   "template": {
     "title": "ADR template",
     "display": "hidden"
