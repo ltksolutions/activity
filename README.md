@@ -156,9 +156,11 @@ Projekt používa **dual licenčný model** rovnako ako sister projekt [sportup.
 Projekt je **REUSE-compliant** ([REUSE Specification 3.3](https://reuse.software/spec/)) — každý súbor má buď SPDX header, alebo je pokrytý cez [`REUSE.toml`](./REUSE.toml). Verifikácia:
 
 ```bash
-pip install reuse
+pipx install reuse  # alebo: pip install --user reuse
 reuse lint
 ```
+
+Compliance je **automaticky kontrolovaná pri každom push a pull request** — pozri [`.github/workflows/reuse.yml`](./.github/workflows/reuse.yml). REUSE je odporúčaný prístup [EÚ Joinup](https://joinup.ec.europa.eu/) pre softvér verejného sektora.
 
 **Prečo EUPL?** EUPL-1.2 je oficiálna open-source licencia Európskej únie, dostupná v 23 jazykoch vrátane slovenčiny, copyleft kompatibilná s GPL/AGPL/MPL, navrhnutá pre verejný sektor. Pozri [ADR-014](https://docs.activity.sportup.sk/adr/0014-licensing-eupl-reuse).
 
