@@ -6,6 +6,12 @@ SPDX-License-Identifier: CC-BY-4.0
 
 **Platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom športe** — športovci, tréneri, rozhodcovia, lekári, fanúšikovia a podporovatelia v jednom systéme.
 
+[![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
+[![License: CC-BY-4.0](https://img.shields.io/badge/Docs_License-CC--BY--4.0-lightgrey.svg)](LICENSE-DOCS)
+[![REUSE status](https://api.reuse.software/badge/github.com/ltksolutions/activity)](https://api.reuse.software/info/github.com/ltksolutions/activity)
+[![Status: MVP](https://img.shields.io/badge/Status-MVP-orange.svg)]()
+[![Slovak](https://img.shields.io/badge/Lang-Slovak-blue.svg)]()
+
 Tento repozitár je **monorepo** obsahujúci všetky aplikácie a balíky tvoriace platformu activity.
 
 ## Vzťah k projektu sportup.sk
