@@ -4,26 +4,80 @@ import { DocsThemeConfig } from 'nextra-theme-docs';
 /**
  * Theme konfigurácia pre docs.activity.sportup.sk
  *
- * Brand: navy + red (slovenská národná farebnosť)
- * Founded on sportup.sk Design Manual v2.0 · 2026
+ * Brand v2: SK Blue (#1A3B8E) + SK Red (#C8243A), Chat Stack mark, Albert Sans + Geist.
+ * Pozri ADR-013 (apps/docs/pages/adr/0013-brand-v2.mdx) a brand manuál (apps/docs/pages/ui/brand.mdx).
  */
+
+/**
+ * Logo komponent — inline SVG mark + HTML wordmark.
+ *
+ * Prečo inline SVG namiesto <img src="/logo.svg">:
+ *  • SVG načítaný cez <img> nemá prístup k page fontom
+ *    → <text font-family="Albert Sans"> sa renderuje system fallback-om
+ *  • <img> nerešpektuje height={28} pri SVG s intrinsic viewBox → wordmark sa roztáhne
+ *
+ * Inline SVG (len Chat Stack mark) + HTML <span> wordmark:
+ *  • Vidí Albert Sans z hlavnej stylesheety → typografia sedí s ostatnou stránkou
+ *  • Predvídateľné rozmery (height/fontSize v px)
+ *  • "docs" sufix vyzerá ako prirodzená časť wordmarku
+ */
+const Logo = () => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+    {/* Chat Stack mark — viewBox 90×100 z brand manuálu, sekcia "08 SVG export" */}
+    <svg
+      viewBox="0 0 90 100"
+      width={26}
+      height={29}
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="activity"
+      style={{ display: 'block', flexShrink: 0 }}
+    >
+      {/* Row 1: 1:1 */}
+      <circle cx="14" cy="16" r="11" fill="#1A3B8E" />
+      <circle cx="34" cy="16" r="11" fill="#1A3B8E" fillOpacity={0.38} />
+      <rect x="50" y="9" width="26" height="15" rx="7.5" fill="#1A3B8E" fillOpacity={0.18} />
+      {/* Row 2: group */}
+      <circle cx="14" cy="50" r="11" fill="#1A3B8E" />
+      <circle cx="30" cy="50" r="11" fill="#C8243A" fillOpacity={0.75} />
+      <circle cx="46" cy="50" r="11" fill="#1A3B8E" fillOpacity={0.32} />
+      <rect x="62" y="43" width="18" height="15" rx="7.5" fill="#C8243A" fillOpacity={0.18} />
+      {/* Row 3: broadcast */}
+      <circle cx="14" cy="84" r="11" fill="currentColor" fillOpacity={0.22} />
+      <rect x="30" y="77" width="52" height="15" rx="7.5" fill="currentColor" fillOpacity={0.10} />
+    </svg>
+
+    {/* Wordmark "activity" — Albert Sans 700 cez page fonts */}
+    <span
+      style={{
+        fontFamily: "'Albert Sans', ui-sans-serif, system-ui, sans-serif",
+        fontWeight: 700,
+        fontSize: 20,
+        letterSpacing: '-0.02em',
+        lineHeight: 1,
+      }}
+    >
+      activity
+    </span>
+
+    {/* Sub-brand "docs" — utlmený, menší font */}
+    <span
+      style={{
+        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+        fontWeight: 500,
+        fontSize: 13,
+        opacity: 0.55,
+        letterSpacing: '0.01em',
+        lineHeight: 1,
+      }}
+    >
+      docs
+    </span>
+  </span>
+);
+
 const config: DocsThemeConfig = {
-  // Logo — SVG image z /public
-  logo: (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-      <img src="/logo.svg" alt="activity" height={28} style={{ display: 'block' }} />
-      <span
-        style={{
-          marginLeft: '0.25rem',
-          opacity: 0.5,
-          fontWeight: 400,
-          fontSize: '0.85rem',
-        }}
-      >
-        docs
-      </span>
-    </div>
-  ),
+  logo: <Logo />,
   logoLink: '/',
 
   // Project repo
@@ -123,6 +177,33 @@ const config: DocsThemeConfig = {
       <meta name="theme-color" content="#1A3B8E" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
       <meta name="color-scheme" content="light dark" />
+
+      {/* Brand v2 fonty: Albert Sans (display) + Geist (body) + Geist Mono (code).
+          Subset latin + latin-ext pre plnú slovenskú diakritiku. Pozri brand manuál §8. */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap&subset=latin,latin-ext"
+      />
+      <style>{`
+        :root {
+          --font-display: 'Albert Sans', ui-sans-serif, system-ui, sans-serif;
+          --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+          --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        }
+        body, .nextra-content {
+          font-family: var(--font-sans);
+        }
+        .nextra-content h1, .nextra-content h2, .nextra-content h3,
+        .nextra-content h4, .nextra-content h5, .nextra-content h6 {
+          font-family: var(--font-display);
+          letter-spacing: -0.02em;
+        }
+        code, pre, kbd, .nextra-code {
+          font-family: var(--font-mono);
+        }
+      `}</style>
     </>
   ),
 
