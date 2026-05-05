@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+# SPDX-License-Identifier: EUPL-1.2
 """
 activity brand v2 — regen skript pre brand assety.
 

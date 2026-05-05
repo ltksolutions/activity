@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # Popis
 
 <!-- Krátko opíš, čo PR robí a prečo. -->

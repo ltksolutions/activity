@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+ * SPDX-License-Identifier: EUPL-1.2
+ */
 import React from 'react';
 import { DocsThemeConfig } from 'nextra-theme-docs';
 
@@ -106,7 +110,15 @@ const config: DocsThemeConfig = {
     text: (
       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
         <span>
-          © {new Date().getFullYear()} activity. Open source pod{' '}
+          © {new Date().getFullYear()} Ján Letko / LTK Solutions ·{' '}
+          <a href="https://github.com/ltksolutions/activity/blob/main/LICENSE" target="_blank" rel="noopener">
+            EUPL-1.2
+          </a>{' '}
+          (kód) ·{' '}
+          <a href="https://github.com/ltksolutions/activity/blob/main/LICENSE-DOCS" target="_blank" rel="noopener">
+            CC-BY-4.0
+          </a>{' '}
+          (docs) ·{' '}
           <a href="https://github.com/ltksolutions/activity" target="_blank" rel="noopener">
             ltksolutions/activity
           </a>

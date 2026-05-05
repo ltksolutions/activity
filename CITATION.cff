@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "Ak používate activity vo svojej práci, prosím citujte ho takto:"
+title: "activity — komunikačná platforma pre slovenský šport"
+abstract: >-
+  Platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom
+  športe — športovci, tréneri, rozhodcovia, lekári, fanúšikovia a
+  podporovatelia v jednom systéme. Klient projektu sportup.sk —
+  využíva jeho registre osôb a organizácií ako autoritatívny zdroj
+  a pridáva nad nimi aktivitnú a komunikačnú vrstvu.
+type: software
+authors:
+  - family-names: Letko
+    given-names: Ján
+    email: activity@ltk.solutions
+    affiliation: LTK Solutions
+repository-code: "https://github.com/ltksolutions/activity"
+url: "https://activity.sportup.sk"
+license: EUPL-1.2
+license-url: "https://github.com/ltksolutions/activity/blob/main/LICENSE"
+keywords:
+  - sport
+  - slovakia
+  - mentoring
+  - communication
+  - mongodb
+  - mcp
+  - nextjs
+  - eupl
+  - public-sector

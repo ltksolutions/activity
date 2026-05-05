@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # Contributing to activity
 
 Vďaka za záujem prispieť. Tento dokument popisuje **ako prispievať** do projektu — či už ide o opravu preklepu v dokumentácii, alebo nový backend feature.
@@ -438,6 +442,82 @@ Niečo nie je jasné? Niečo chýba?
 - **Bug v dokumentácii** → GitHub Issue s tagom `docs:bug`
 - **Návrh nového dokumentu** → GitHub Issue s tagom `docs:feature`
 - **Diskusia o obsahu** → GitHub Discussion s tagom `docs:content`
+
+## Licenčný model a SPDX
+
+Projekt používa **dual licenčný model** — každá kontribúcia musí byť kompatibilná:
+
+| Časť projektu | Licencia | Pokrytie |
+|---|---|---|
+| Zdrojový kód (TS/TSX/CSS/JS/Python) | **EUPL-1.2** | `apps/*/src`, packages, build tools |
+| Dokumentácia, brand, marketing | **CC-BY-4.0** | `apps/docs/`, `apps/web/`, `branding-source/`, `*.md` |
+
+Projekt je [REUSE-compliant](https://reuse.software/spec/) — každý nový súbor musí obsahovať SPDX header (alebo byť pokrytý v `REUSE.toml`).
+
+### SPDX hlavičky pre nové súbory
+
+**Zdrojový kód** (TS/TSX/CSS/JS/MJS):
+```ts
+/*
+ * SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+ * SPDX-License-Identifier: EUPL-1.2
+ */
+```
+
+**Dokumentácia** (MD/MDX):
+```md
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
+```
+
+**Python** (build tools):
+```python
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+# SPDX-License-Identifier: EUPL-1.2
+```
+
+**HTML** (marketing web):
+```html
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
+```
+
+Ak si nový k REUSE, použi automatický skript, ktorý headery pridá správne podľa typu súboru:
+
+```bash
+python3 tools/add-spdx-headers.py --apply    # pridá všetky chýbajúce
+python3 tools/add-spdx-headers.py --check    # exit 1 ak niečo chýba
+```
+
+### Verifikácia
+
+Lokálne pred PR-om:
+```bash
+pip install reuse
+reuse lint        # musí ukázať "Congratulations! Your project is compliant with version 3.3 of the REUSE Specification"
+```
+
+### Copyright pre nových prispievateľov
+
+Keď pridávaš významnú kontribúciu, môžeš pridať svoj copyright riadok navrch existujúceho:
+
+```ts
+/*
+ * SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+ * SPDX-FileCopyrightText: 2026 Tvoje Meno <tvoj@email.com>
+ * SPDX-License-Identifier: EUPL-1.2
+ */
+```
+
+Tým sa zachová úplná atribúcia bez nutnosti CLA.
+
+---
 
 ## Vďaka
 

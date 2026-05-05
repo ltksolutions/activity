@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # activity
 
 **Platforma pre evidenciu aktivít, mentoring a komunikáciu v slovenskom športe** — športovci, tréneri, rozhodcovia, lekári, fanúšikovia a podporovatelia v jednom systéme.
@@ -57,7 +61,11 @@ activity/
 ├── package.json             ← Root workspace config
 ├── README.md                ← Tento súbor
 ├── CONTRIBUTING.md          ← Pokyny pre prispievateľov
-└── LICENSE                  ← MIT
+├── LICENSE                  ← EUPL-1.2 (zdrojový kód)
+├── LICENSE-DOCS             ← CC-BY-4.0 (dokumentácia, marketing, brand)
+├── LICENSES/                ← REUSE Specification — plné texty licencií
+├── REUSE.toml               ← REUSE — anotácie pre binárne súbory
+└── CITATION.cff             ← Citačné údaje (academic / public sector)
 ```
 
 ## Začni tu
@@ -132,7 +140,21 @@ TBD — postupne pribudnú s implementáciou.
 
 ## Licencia
 
-MIT — pozri [LICENSE](./LICENSE).
+Projekt používa **dual licenčný model** rovnako ako sister projekt [sportup.sk](https://github.com/ltksolutions/sportup.sk):
+
+| Časť | Licencia | Pokrytie |
+|---|---|---|
+| **Zdrojový kód** (TS/TSX/CSS/JS/Python) | [**EUPL-1.2**](./LICENSE) | `apps/*/src`, shared packages, build tools |
+| **Dokumentácia, brand, marketing** | [**CC-BY-4.0**](./LICENSE-DOCS) | `apps/docs/`, `apps/web/`, `branding-source/`, `*.md` |
+
+Projekt je **REUSE-compliant** ([REUSE Specification 3.3](https://reuse.software/spec/)) — každý súbor má buď SPDX header, alebo je pokrytý cez [`REUSE.toml`](./REUSE.toml). Verifikácia:
+
+```bash
+pip install reuse
+reuse lint
+```
+
+**Prečo EUPL?** EUPL-1.2 je oficiálna open-source licencia Európskej únie, dostupná v 23 jazykoch vrátane slovenčiny, copyleft kompatibilná s GPL/AGPL/MPL, navrhnutá pre verejný sektor. Pozri [ADR-014](https://docs.activity.sportup.sk/adr/0014-licensing-eupl-reuse).
 
 ## Kontakt a podpora
 

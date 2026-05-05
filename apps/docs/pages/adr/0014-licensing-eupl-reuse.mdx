@@ -1,0 +1,219 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
+
+# ADR-014: Licenčný model — EUPL-1.2 + CC-BY-4.0 + REUSE Specification
+
+**Status:** ✅ Accepted
+
+**Dátum:** 2026-05
+
+**Kontext otázky:** N/A (rozhodnutie počas exekúcie po prerob brand v2)
+
+## Kontext
+
+V počiatočnej fáze projektu (apríl 2026) bol activity licencovaný pod **MIT License**:
+
+```
+Copyright (c) 2026 sportup contributors
+```
+
+Tento prístup mal niekoľko slabín:
+
+1. **Inkonzistencia s sister projektom** — `sportup.sk` je pod **EUPL-1.2 + CC-BY-4.0** (dual model). Keďže activity je *klient* projektu sportup.sk a žije v rovnakom GitHub organizačnom účte (`ltksolutions/`), licenčná divergencia by spôsobovala zmätok.
+
+2. **Nesprávny copyright holder** — *"sportup contributors"* nie je právne určená entita. Pravdepodobne by sa muselo prepísať pri prvom seriozne použitej licenčnej notice v štátnej správe alebo eGov projekte.
+
+3. **MIT je permissive bez copyleftu** — activity je projekt pre **slovenský verejný sektor (šport)** a obsahuje work zameraný na verejný úžitok. Permissive licencia (ako MIT) umožňuje proprietárny fork bez návratu úprav späť do otvoreného projektu, čo je v rozpore s ambíciou *"otvorené riešenie pre slovenský šport"*.
+
+4. **Nekompatibilita s budúcim eGov nasadením** — keď bude activity integrovaný so štátnymi registrami cez ÚPVS / RFO / RPO, môže sa stať predmetom auditu z hľadiska licenčnej čistoty (NBÚ, ÚVO). MIT bez explicitného európskeho právneho rámca by tu mohol byť trecou plochou.
+
+5. **Žiadna jednoznačnosť per-súbor** — bez SPDX hlavičiek nie je možné automaticky overiť, akú licenciu má konkrétny súbor. Pre právny audit a SBOM (Software Bill of Materials) generovanie je to obmedzenie.
+
+## Rozhodnutie
+
+Od mája 2026 prechádzame na **dual licenčný model + REUSE Specification 3.3**:
+
+### 1. EUPL-1.2 pre zdrojový kód
+
+**Európska licencia pre verejnú správu (European Union Public Licence)** — oficiálna open-source licencia EÚ, vytvorená Európskou komisiou v roku 2007 a aktualizovaná na verziu 1.2 v 2017.
+
+**Vlastnosti:**
+
+| Aspekt | Hodnota |
+|---|---|
+| Typ | Strong copyleft (slabší než GPL, silnejší než LGPL) |
+| OSI Approved | ✅ Áno (od 2009) |
+| FSF Free | ✅ Áno |
+| SPDX identifier | `EUPL-1.2` |
+| Jazyky | 23 oficiálnych jazykov EÚ vrátane **slovenčiny** |
+| Jurisdikcia | Belgicko (Brusel) — európske právo |
+| Patenty | Explicitne pokryté (Article 2) |
+| Kompatibilita | GPL-2.0+, GPL-3.0+, AGPL-3.0+, MPL-2.0, OSL-3.0, CeCILL-2.1, ECL-2.0, LiLiQ |
+
+**Pokrytie:** všetok zdrojový kód v repe — TS/TSX/CSS/JS/Python, build tools, JSON konfigurácia (cez REUSE.toml).
+
+### 2. CC-BY-4.0 pre dokumentáciu, brand a marketing
+
+**Creative Commons Attribution 4.0 International** — najstandardnejšia licencia pre kreatívne diela a dokumentáciu.
+
+**Vlastnosti:**
+
+| Aspekt | Hodnota |
+|---|---|
+| Typ | Permissive s atribúciou |
+| SPDX identifier | `CC-BY-4.0` |
+| Komerčné použitie | ✅ Povolené |
+| Modifikácie | ✅ Povolené |
+| Atribúcia vyžadovaná | ✅ Áno |
+| Share-alike vyžadované | ❌ Nie (nie je `CC-BY-SA-4.0`) |
+
+**Pokrytie:** `apps/docs/` (Nextra dokumentácia), `apps/web/` (marketing web), `apps/*/assets/` (logá, ikony, OG images), `branding-source/` (brand source HTML), MD súbory v root-e.
+
+### 3. REUSE Specification 3.3
+
+[REUSE](https://reuse.software/) je iniciatíva **Free Software Foundation Europe (FSFE)**, ktorá štandardizuje licenčnú jednoznačnosť na úrovni jednotlivých súborov.
+
+**Implementácia:**
+
+- **`LICENSES/` adresár** s plnotextovými licenciami (`EUPL-1.2.txt`, `CC-BY-4.0.txt`)
+- **SPDX header v každom textovom súbore** vo formáte:
+  ```
+  SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+  SPDX-License-Identifier: EUPL-1.2
+  ```
+- **`REUSE.toml`** v root-e pre súbory bez podpory komentárov (binárne, JSON, manifests)
+- **Verifikácia:** `reuse lint` — musí prejsť bez chýb pre kompletný compliance
+
+**Hlavné výhody:**
+
+✅ **Automatický SBOM** — `reuse spdx > sbom.spdx` vygeneruje kompletný SBOM v SPDX formáte
+✅ **Audit-ready** — právny audit vie automaticky overiť licenciu každého súboru
+✅ **Per-file granularity** — keď v budúcnosti pribudne third-party kód (knižnica pod inou licenciou), je to jednoznačne označené
+✅ **CI integrácia** — `reuse lint` v GitHub Actions zabráni merge PR-u s neoznačeným súborom
+
+### 4. Copyright holder
+
+```
+Ján Letko <activity@ltk.solutions>
+```
+
+Konzistentné s `CITATION.cff` v sister projekte sportup.sk:
+```yaml
+authors:
+  - family-names: Letko
+    given-names: Ján
+    affiliation: LTK Solutions
+```
+
+Email `activity@ltk.solutions` je analogický k `sportup@ltk.solutions` v sister projekte — projekt-specifický alias na rovnakú doménu.
+
+## Dôsledky
+
+### Pozitívne
+
+✅ **Konzistencia s sister projektom** — `sportup.sk` aj `activity` majú identický licenčný model
+✅ **Strong copyleft** — derivátne diela musia ostať open-source pod EUPL alebo kompatibilnou licenciou
+✅ **Európsky právny rámec** — EUPL je natívne kompatibilná so slovenským právom (oficiálny SK preklad uznávaný eGov)
+✅ **Audit-ready** — REUSE compliance dáva právnym auditom 100% jednoznačnosť
+✅ **SBOM generovanie zadarmo** — `reuse spdx` produkuje machine-readable bill of materials
+✅ **Connection to public sector** — EUPL je *de facto* licencia EU eGov projektov (Joinup catalogue), čo zjednoduší možný transfer projektu na verejné inštitúcie
+
+### Negatívne
+
+❌ **Migrácia existujúcich súborov** — všetkých 71 textových súborov dostalo SPDX header (vyriešené automatizovaným skriptom `tools/add-spdx-headers.py`)
+❌ **Mierne ťažší contributor onboarding** — nový prispievateľ musí pridať SPDX header pri každom novom súbore (mitigované cez `add-spdx-headers.py --apply`)
+❌ **Stricter than MIT** — copyleft môže odradiť firmy, ktoré chcú proprietárny fork. Ale to je **úmysel** — chceme aby zlepšenia tečli späť do verejného projektu
+❌ **EUPL je menej známa než MIT/Apache** — niektorí vývojári ju nikdy nestretli, môžu byť na začiatku zmätení (mitigované odkazmi na ADR-014 a docs/contributing)
+
+### Neutrálne
+
+➖ **Žiadny CLA (Contributor License Agreement)** — projekt nepoužíva CLA. Prispievatelia jednoducho pridajú svoj `SPDX-FileCopyrightText` riadok navrch existujúcich, čo automaticky atribuuje copyright bez ďalšej právnej konštrukcie.
+➖ **Backward compatibility** — keďže ide o major version bump licencie (z permissive na copyleft), existujúce forky pod MIT zostávajú validne pod MIT (commit hash sa nemení) — nový clone bude pod EUPL.
+
+## Implementačné poznámky
+
+### Aktualizované súbory
+
+| Súbor | Zmena |
+|---|---|
+| `LICENSE` | MIT → EUPL-1.2 (oficiálny anglický text) |
+| `LICENSE-DOCS` | (nový) CC-BY-4.0 explanation pre docs/brand |
+| `LICENSES/EUPL-1.2.txt` | (nový) Plný text EUPL-1.2 (REUSE wymaganie) |
+| `LICENSES/CC-BY-4.0.txt` | (nový) Plný text CC-BY-4.0 (REUSE wymaganie) |
+| `REUSE.toml` | (nový) Anotácie pre binárne/JSON súbory |
+| `CITATION.cff` | (nový) Citačné údaje pre academic / public sector |
+| `package.json` | `"license": "MIT"` → `"license": "EUPL-1.2"` |
+| `README.md` | Licencia sekcia rebuild |
+| `CONTRIBUTING.md` | Pridaná SPDX hlavičky guide pre prispievateľov |
+| `apps/docs/theme.config.tsx` | Footer text update (EUPL-1.2 + CC-BY-4.0 odkazy) |
+| `tools/add-spdx-headers.py` | (nový) Automatický bulk SPDX header pridávač |
+| 71 textových súborov | Pridaný SPDX header (10 EUPL + 61 CC-BY) |
+
+### Verifikácia
+
+Lokálne:
+```bash
+pip install reuse
+reuse lint
+# Expected: "Congratulations! Your project is compliant with version 3.3 of the REUSE Specification"
+```
+
+V CI (GitHub Actions, plánované ako follow-up):
+```yaml
+- name: REUSE Compliance Check
+  uses: fsfe/reuse-action@v3
+```
+
+## Alternatívy ktoré sme zvažovali
+
+### A) Zostať s MIT (status quo)
+
+**Výhody:** žiadna migrácia, najznámejšia licencia, kompatibilita so všetkým
+**Nevýhody:** všetky 5 problémov uvedených v Kontexte zostávajú; nesúlad so sister projektom
+
+### B) Apache-2.0
+
+**Výhody:** explicitné patentové ustanovenia, široko používaná v podnikovom prostredí
+**Nevýhody:** ne-copyleft (rovnaký problém ako MIT), americký právny rámec
+
+### C) AGPL-3.0
+
+**Výhody:** najstrongerejší copyleft (vzťahuje sa aj na network use)
+**Nevýhody:** príliš strict pre webovú aplikáciu (každá modifikácia musí byť verejná, aj internal forky); odradzuje partnerov; nekompatibilita s niektorými EU regulačnými projektami
+
+### D) GPL-3.0
+
+**Výhody:** silný copyleft, široko známy
+**Nevýhody:** americký právny rámec, znížená kompatibilita s EU projektami
+
+### E) **EUPL-1.2 + CC-BY-4.0 + REUSE** (zvolené) ✓
+
+**Výhody:** európsky kontext, konzistencia s sister projektom, REUSE compliance, slovenský preklad uznávaný
+**Nevýhody:** menšia známosť, potrebná migrácia (akceptovateľné v MVP fáze)
+
+## Kedy znova otvoríme
+
+Licenčné rozhodnutie je **stable na minimum 5 rokov**. Možné triggery pre revíziu:
+
+- EUPL v2.0 vydanie — pravdepodobné v rokoch 2027-2030 (potom upgrade)
+- Akvizícia / merger so subjektom s nekompatibilnou licenčnou politikou
+- Štátna inštitúcia by požadovala explicitne CC0 / Public Domain (málo pravdepodobné pre kód, možno pre špecifické dataset-y v `branding-source/`)
+- Open Source Initiative by stratila uznanie EUPL (extrémne nepravdepodobné)
+
+Bez týchto triggerov sa k licencii nevraciame. Drobné zmeny (nový LICENSES/ entry pre third-party knižnicu pod inou licenciou) sú možné bez novej ADR — len cez REUSE.toml update.
+
+## Súvisiace ADR
+
+- **[ADR-010](0010-sportup-mirror)** — vzťah s sportup.sk (potvrdzuje, že activity by mal byť licenčne konzistentný)
+- **[ADR-013](0013-brand-v2)** — brand v2 (visual identity je teraz pod CC-BY-4.0)
+
+## Súvisiace zdroje
+
+- **[EUPL official site](https://commission.europa.eu/content/european-union-public-licence_en)** — Európska komisia, 23 jazykových verzií
+- **[EUPL na Joinup](https://joinup.ec.europa.eu/collection/eupl)** — EU eGov community
+- **[CC-BY-4.0 legal code](https://creativecommons.org/licenses/by/4.0/legalcode)** — Creative Commons
+- **[REUSE Specification 3.3](https://reuse.software/spec/)** — FSFE
+- **[SPDX License List](https://spdx.org/licenses/)** — autoritatívny zoznam SPDX identifikátorov
+- **[CITATION.cff format](https://citation-file-format.github.io/)** — academic citation metadata

@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # @activity/web — marketing web pre activity.sportup.sk
 
 Statický HTML/CSS/JS marketing web projektu **activity**, nasadený na [activity.sportup.sk](https://activity.sportup.sk).

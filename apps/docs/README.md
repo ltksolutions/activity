@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # @activity/docs
 
 Nextra projekt pre verejnú dokumentáciu projektu **activity**, nasadený na [docs.activity.sportup.sk](https://docs.activity.sportup.sk).

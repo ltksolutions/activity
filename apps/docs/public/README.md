@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # Public assets
 
 Tento priečinok obsahuje **statické assety** servované Nextrom — logá, ikony, OG image-y.

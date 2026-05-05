@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # Otvorené otázky
 
 > Toto je zoznam **rozhodnutí, ktoré sa v návrhovej fáze vedome nezavreli** a treba ich uzavrieť počas implementácie. Každá otázka má kontext, varianty riešenia, a ak má návrhová fáza preferenciu, je naznačená.

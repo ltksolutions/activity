@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+# SPDX-License-Identifier: CC0-1.0
+
+# REUSE Specification 3.3 — annotations for files that cannot carry
+# inline SPDX headers (binaries, JSON without comment support, etc.).
+#
+# For files WITH inline SPDX headers, see the headers themselves.
+# For full licence texts, see LICENSES/.
+#
+# Validation:  reuse lint
+# Spec:        https://reuse.software/spec/
+
+version = 1
+
+# ─── Brand assets (binary): logos, icons, OG images, favicons ─────────
+# CC-BY-4.0 — visual works are documentation-class artefacts.
+
+[[annotations]]
+path = [
+  "apps/web/assets/**",
+  "apps/docs/public/**",
+  "apps/web/favicon.ico",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+
+# ─── JSON config files (no comment syntax) ─────────────────────────────
+# Project structure / tool configs → EUPL-1.2 (treated as source code).
+
+[[annotations]]
+path = [
+  "package.json",
+  "package-lock.json",
+  "apps/**/package.json",
+  "apps/**/tsconfig.json",
+  "apps/**/_meta.json",
+  "apps/**/vercel.json",
+  "**/.npmrc",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "EUPL-1.2"
+
+
+# ─── PWA manifests (JSON-like) ─────────────────────────────────────────
+# Considered configuration → EUPL-1.2.
+
+[[annotations]]
+path = [
+  "apps/web/site.webmanifest",
+  "apps/docs/public/site.webmanifest",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "EUPL-1.2"
+
+
+# ─── Repo metadata files ───────────────────────────────────────────────
+# .gitignore/.gitattributes/.editorconfig support # comments but are
+# infrastructure-class — keep them under EUPL-1.2 with the source code.
+
+[[annotations]]
+path = [
+  ".gitignore",
+  ".gitattributes",
+  ".editorconfig",
+  ".github/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "EUPL-1.2"
+
+
+# ─── Branding source HTML (interactive brand definitions) ──────────────
+# Treated as documentation/visual artefacts → CC-BY-4.0.
+
+[[annotations]]
+path = "branding-source/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+
+# ─── Citation metadata ─────────────────────────────────────────────────
+# CITATION.cff is a YAML file describing the project for academic citation.
+# Documentation-class → CC-BY-4.0.
+
+[[annotations]]
+path = "CITATION.cff"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "CC-BY-4.0"

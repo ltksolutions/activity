@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # tools/
 
 > Pomocné skripty pre údržbu projektu activity. Nie sú súčasťou build pipeline žiadnej apps — spúšťajú sa ručne pri údržbe.

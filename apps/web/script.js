@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+ * SPDX-License-Identifier: EUPL-1.2
+ */
 /**
  * activity — marketing web client script
  *

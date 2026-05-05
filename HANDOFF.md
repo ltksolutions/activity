@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+SPDX-License-Identifier: CC-BY-4.0
+-->
 # Handoff dokument
 
 > Toto je vstupný bod pre senior developera, ktorý preberá projekt **activity** do implementačnej fázy. Cieľom dokumentu je dať za 30 minút prehľad o tom, čo je hotové, čo je rozhodnuté, čo je otvorené, a kde sa s tým ďalej pracuje.
@@ -29,6 +33,7 @@ Repo: **[github.com/ltksolutions/activity](https://github.com/ltksolutions/activ
 | Integrácia s sportup.sk | ✅ Návrh | [docs.activity.sportup.sk/sportup-sk-integration](https://docs.activity.sportup.sk/sportup-sk-integration) |
 | Marketing web | ✅ Live | [activity.sportup.sk](https://activity.sportup.sk) |
 | Branding (logo, farby, favicon, OG, brand manuál, ADR-013) | ✅ Hotové | `apps/web/assets/`, `apps/docs/public/`, `branding-source/`, [docs/ui/brand](https://docs.activity.sportup.sk/ui/brand) |
+| Licencia & REUSE compliance (EUPL-1.2 + CC-BY-4.0, ADR-014) | ✅ Hotové | `LICENSE`, `LICENSE-DOCS`, `LICENSES/`, `REUSE.toml`, `CITATION.cff` |
 | **Architecture Decision Records (ADR)** | ✅ Hotové | [docs.activity.sportup.sk/adr](https://docs.activity.sportup.sk/adr) |
 | **Otvorené otázky pre seniora** | ✅ Hotové | [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) |
 
@@ -64,6 +69,7 @@ Tieto rozhodnutia padli, otvorenie ich znova by stratilo prácu. Sú podložené
 - **SSE + Redis Pub/Sub** pre real-time delivery (nie WebSocket, nie Change Streams) — [ADR-011](https://docs.activity.sportup.sk/adr/0011-sse-realtime)
 - **Vercel** zostáva pre Next.js apps, nie ideme na Google ani inú cloud — [ADR-012](https://docs.activity.sportup.sk/adr/0012-vercel-stays)
 - **Brand v2** (SK Blue/Red, Chat Stack, Albert Sans + Geist) — [ADR-013](https://docs.activity.sportup.sk/adr/0013-brand-v2)
+- **Licenčný model** EUPL-1.2 (kód) + CC-BY-4.0 (docs) + REUSE Specification 3.3 — [ADR-014](https://docs.activity.sportup.sk/adr/0014-licensing-eupl-reuse)
 
 ## Čo ja **neviem**, čo musíš ty
 

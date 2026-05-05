@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
+# SPDX-License-Identifier: EUPL-1.2
 name: 🐛 Bug v dokumentácii
 description: Nahlás chybu, nepresnosť alebo broken link v dokumentácii
 labels: ["docs:bug"]
