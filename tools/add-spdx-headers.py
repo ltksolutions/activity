@@ -55,6 +55,8 @@ def classify(rel_path: Path) -> str | None:
         return None
     if ext == '.json':
         return None  # JSON nemá comment syntax → REUSE.toml
+    if ext == '.mdx':
+        return None  # MDX nepodporuje HTML kommentáre → REUSE.toml (apps/docs/pages/**/*.mdx)
 
     # Branding source → docs
     if s.startswith('branding-source/'):
@@ -64,8 +66,8 @@ def classify(rel_path: Path) -> str | None:
     if ext == '.svg' and ('/assets/' in s or '/public/' in s):
         return None  # spracované cez REUSE.toml (brand assets)
 
-    # Markdown/MDX → docs
-    if ext in ('.md', '.mdx'):
+    # Markdown → docs (MDX je skipnutý vyššie kvôli MDX parser limitations)
+    if ext == '.md':
         return LICENSE_DOCS
 
     # Marketing web HTML → docs (content)

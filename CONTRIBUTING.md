@@ -464,13 +464,15 @@ Projekt je [REUSE-compliant](https://reuse.software/spec/) — každý nový sú
  */
 ```
 
-**Dokumentácia** (MD/MDX):
+**Dokumentácia** (MD):
 ```md
 <!--
 SPDX-FileCopyrightText: 2026 Ján Letko <activity@ltk.solutions>
 SPDX-License-Identifier: CC-BY-4.0
 -->
 ```
+
+> **MDX súbory** (`apps/docs/pages/**/*.mdx`) **nemajú inline header** — MDX parser nepodporuje HTML kommentáre. Ich licencia (CC-BY-4.0) je pokrytá cez `REUSE.toml`. Nové MDX súbory v `apps/docs/pages/` a podadresároch automaticky dedia tento aggregate header — nič nežiadať pri ich tvorbe.
 
 **Python** (build tools):
 ```python

@@ -83,6 +83,22 @@ SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
 SPDX-License-Identifier = "CC-BY-4.0"
 
 
+# ─── MDX documentation files ──────────────────────────────────────────────────
+# MDX does NOT support HTML comments (<!-- ... -->); JSX-style {/* ... */}
+# would be required, but those clutter MDX content. Keeping headers OUT of
+# .mdx files entirely is cleaner — documentation files are aggregate-licensed
+# here.
+#
+# This avoids the "Unexpected character `!`" build error from the MDX parser
+# when encountering SPDX HTML comments at the top of files.
+
+[[annotations]]
+path = "apps/docs/pages/**/*.mdx"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ján Letko <activity@ltk.solutions>"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+
 # ─── Citation metadata ─────────────────────────────────────────────────
 # CITATION.cff is a YAML file describing the project for academic citation.
 # Documentation-class → CC-BY-4.0.
