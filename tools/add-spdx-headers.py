@@ -105,12 +105,16 @@ def comment_style(ext: str, name: str) -> tuple[str, str, str]:
 def make_header(license_id: str, ext: str, name: str) -> str:
     """Vytvorí kompletný SPDX header pre daný súbor."""
     prefix, line_prefix, suffix = comment_style(ext, name)
+    # Šablóny nižšie nie sú údaje o licencii tohto súboru — `reuse lint` by
+    # inak čítal `{license_id}` ako neplatný SPDX výraz.
+    # REUSE-IgnoreStart
     if line_prefix:
         line1 = f'{line_prefix}SPDX-FileCopyrightText: {COPYRIGHT}'
         line2 = f'{line_prefix}SPDX-License-Identifier: {license_id}'
         return f'{prefix}{line1}\n{line2}{suffix}'
     else:  # HTML/MD/SVG comment block
         return f'{prefix}SPDX-FileCopyrightText: {COPYRIGHT}\nSPDX-License-Identifier: {license_id}{suffix}'
+    # REUSE-IgnoreEnd
 
 
 # ─── Detekcia, kde vložiť header (po shebang, doctype, atď.) ──────────────
