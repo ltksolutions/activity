@@ -149,7 +149,7 @@ Donation {
 }
 ```
 
-### `sponsorship_activation` — Sponzorská aktivácia
+### `sponsorship` — Sponzorská aktivácia
 
 Sponzor robí kampaň alebo content na podporu svojej značky:
 
@@ -174,9 +174,9 @@ Podporovateľ môže komentovať pod aktivitami, ktoré priamo podporuje:
 | Aktivita | Podporovateľ R | Podporovateľ W |
 |---|---|---|
 | Vlastný `donation` | ✓ | ✓ |
-| `match_participation` sponzorovaného športovca | ✓ | ✓ |
-| `mentoring_session` | – | – |
-| `medical_treatment` | – | – |
+| `match` sponzorovaného športovca | ✓ | ✓ |
+| `mentoring` | – | – |
+| `medical` | – | – |
 
 ## Komunikácia
 
@@ -285,7 +285,7 @@ Pre 2% dane: oficiálne reporty pre Notárska komoru, Daňový úrad. TBD interf
 
 Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
 
-| Aktivita | Vlastný `donation` | Cudzí `donation` | `sponsorship_activation` (vlastná) | `match_participation` sponzorovaného |
+| Aktivita | Vlastný `donation` | Cudzí `donation` | `sponsorship` (vlastná) | `match` sponzorovaného |
 |---|---|---|---|---|
 | R | ✓ | ✓ (ak verejné) | ✓ | ✓ |
 | W | ✓ | – | ✓ | ✓ (komentáre) |

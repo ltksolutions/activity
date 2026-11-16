@@ -48,16 +48,16 @@ Person {
 | Typ aktivity | Retencia | Poznámka |
 |---|---|---|
 | `training` | 7 rokov | Štandard pre šport |
-| `match_participation` | navždy | Audit kariéry |
-| `match_evaluation` | navždy | Súčasť kariérnej dokumentácie |
-| `medical_treatment` | 20 rokov po skončení liečby | Slovenský zákon o zdravotnej starostlivosti |
-| `mentoring_session` | navždy | Súčasť kariérneho rozvoja |
+| `match` | navždy | Audit kariéry |
+| `delegate` | navždy | Súčasť kariérnej dokumentácie |
+| `medical` | 20 rokov po skončení liečby | Slovenský zákon o zdravotnej starostlivosti |
+| `mentoring` | navždy | Súčasť kariérneho rozvoja |
 | `mentoring_cycle` (final eval) | navždy | Vrátane záverečného hodnotenia |
-| `education_event` | navždy | Vzdelávacie kredity nestarnú |
+| `education` | navždy | Vzdelávacie kredity nestarnú |
 | `donation` | 10 rokov | Daňové účely |
 | `antidoping_record` | 10 rokov | WADA štandard |
 | `incident_report` | 10 rokov | Bezpečnosť, súdne spory |
-| `fan_interaction` | 2 roky | Štandardný marketing data |
+| `fans` | 2 roky | Štandardný marketing data |
 
 ### Courier správy
 
@@ -114,7 +114,7 @@ Subjekt môže požiadať o **export všetkých svojich dát**.
   person: { ... },
   activities: [
     { type: 'training', ... },
-    { type: 'mentoring_session', ... },
+    { type: 'mentoring', ... },
     ...
   ],
   conversations: [...],

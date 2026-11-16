@@ -172,6 +172,16 @@ Ale to robí formulár ťažší a kratšie sedenia jeden veľký šum.
 
 **Prefer:** Voľný text pre MVP. Štruktúra v Phase 2 podľa user feedback.
 
+### Q-028 🟡 Definícia pravidelnosti pohybovej aktivity
+
+Pravidelnosť je hlavný ukazovateľ pre štát a samosprávu (viď [ADR-015](apps/docs/pages/adr/0015-jednotne-typy-aktivit.mdx)). Zákon o športe dnes za aktívneho športovca považuje účasť na najmenej troch súťažiach za rok, čo o pravidelnom pohybe nehovorí takmer nič. Treba určiť, kedy je osoba „pravidelne aktívna“.
+
+- **(A)** Aspoň jedna pohybová aktivita týždenne v 4 zo 6 posledných týždňov — jednoduché, zachytí aj sezónne prestávky
+- **(B)** Aspoň 150 minút pohybovej aktivity týždenne (odporúčanie WHO) — zdravotne relevantné, ale záznamy z fitness a škôl často nemajú presné trvanie
+- **(C)** Kombinácia: frekvencia (A) ako hlavný ukazovateľ, minúty (B) ako doplnkový
+
+**Prefer:** (C), s (A) ako prvým ukazovateľom v MVP.
+
 ---
 
 ## Bezpečnosť a privacy

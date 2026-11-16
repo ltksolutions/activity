@@ -116,7 +116,7 @@ Training {
 }
 ```
 
-### `match_participation` — Účasť na zápase / preteku
+### `match` — Účasť na zápase / preteku
 
 ```
 MatchParticipation {
@@ -127,7 +127,7 @@ MatchParticipation {
 }
 ```
 
-### `medical_treatment` — Zdravotná aktivita
+### `medical` — Zdravotná aktivita
 
 Najcitlivejší typ. Vstupné prehliadky, ošetrenia po zraneniach, fyzio sedenia, atď.
 
@@ -142,7 +142,7 @@ MedicalTreatment {
 }
 ```
 
-### `education_event` — Vzdelávacie aktivity
+### `education` — Vzdelávacie aktivity
 
 Napríklad antidopingové školenia (povinné pre profesionálov), bezpečnostné kurzy.
 
@@ -150,7 +150,7 @@ Napríklad antidopingové školenia (povinné pre profesionálov), bezpečnostn�
 
 Ak má športovec mecenášov alebo crowdfunding kampaň.
 
-### `sponsorship_activation` — Sponzorská aktivácia
+### `sponsorship` — Sponzorská aktivácia
 
 Účasť na kampaňach sponzora.
 
@@ -182,7 +182,7 @@ ACL: najprísnejšia, viď [../acl/matrix-comments](/acl/matrix-comments).
 
 ### Reprezentácia
 
-Reprezentačné nominácie sú špeciálny prípad `match_participation` s `level: 'national_team'` flagom.
+Reprezentačné nominácie sú špeciálny prípad `match` s `level: 'national_team'` flagom.
 
 ## Vzťahy s ostatnými používateľmi
 
@@ -309,9 +309,9 @@ Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
 | Aktivita | Subjekt | Tréner klubu | Lekár klubu | Rodič (ak maloletý) |
 |---|---|---|---|---|
 | Vlastný `training` | ✓ | ✓ | – | ✓ |
-| Vlastný `match_participation` | ✓ | ✓ | – | ✓ |
-| Vlastný `medical_treatment` | ✓ | – | ✓ | ✓ (full) |
-| Vlastný `mentoring_session` | ✓ | – (ak nie mentor) | – | ✓ |
+| Vlastný `match` | ✓ | ✓ | – | ✓ |
+| Vlastný `medical` | ✓ | – | ✓ | ✓ (full) |
+| Vlastný `mentoring` | ✓ | – (ak nie mentor) | – | ✓ |
 | Vlastný `donation` | ✓ | – | – | ✓ |
 | Vlastný `antidoping_record` | ✓ | – | – | ✓ |
 

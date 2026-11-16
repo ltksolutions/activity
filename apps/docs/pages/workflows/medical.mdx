@@ -87,7 +87,7 @@ Pre **mentálnych koučov a výživových poradcov** licencia v slovenskom konte
 
 ## Hlavné aktivity
 
-### `medical_treatment` — Ošetrenie / vyšetrenie
+### `medical` — Ošetrenie / vyšetrenie
 
 Najfrekventovanejšia aktivita zdravotníckeho personálu:
 
@@ -141,7 +141,7 @@ MentalSessionPrivateNote {
 
 ### `medical_examination` — Vstupná športová prehliadka
 
-Špeciálny prípad `medical_treatment` s `treatmentType: 'examination'` a podpoľami:
+Špeciálny prípad `medical` s `treatmentType: 'examination'` a podpoľami:
 
 ```
 {
@@ -175,7 +175,7 @@ Z incidentu môže nasledovať `MedicalTreatment` aktivity počas rehabilitácie
 
 ### `mental_session` — Sedenie s mentálnym koučom
 
-Štruktúrované ako `medical_treatment` ale s vlastnými poliami špecifickými pre psychologickú prácu.
+Štruktúrované ako `medical` ale s vlastnými poliami špecifickými pre psychologickú prácu.
 
 ### `nutrition_consultation` — Konzultácia s výživovým poradcom
 
@@ -190,7 +190,7 @@ NutritionConsultation {
 }
 ```
 
-### `education_event` — Vzdelávanie
+### `education` — Vzdelávanie
 
 Pre udržanie a postup licencie. Lekári musia mať pravidelné kontinuálne vzdelávanie (cez SLK).
 
@@ -234,9 +234,9 @@ Pre nového člena klubu:
 ### Akútne zranenie počas zápasu
 
 1. Tímový lekár alebo fyzio zachytí cez `incident_report`
-2. Po stabilizácii vyhotoví `medical_treatment` so zraneniem
-3. Pri vážnom zranení nasleduje hospitalizácia (mimo systému) — neskôr sa doplní `medical_treatment` s diagnózou z nemocnice
-4. Rehabilitačný plán cez následné `medical_treatment` aktivity (`treatmentType: 'rehabilitation'`)
+2. Po stabilizácii vyhotoví `medical` so zraneniem
+3. Pri vážnom zranení nasleduje hospitalizácia (mimo systému) — neskôr sa doplní `medical` s diagnózou z nemocnice
+4. Rehabilitačný plán cez následné `medical` aktivity (`treatmentType: 'rehabilitation'`)
 5. Pred návratom: `medical_examination` s `examinationType: 'return_to_play'`
 
 ### TUE — Therapeutic Use Exemption
@@ -254,7 +254,7 @@ Detailne v [../acl/matrix-comments](/acl/matrix-comments), zhrnutie:
 
 | Záznam | Vidí športovec | Vidí lekár-autor | Vidí klubový lekár | Vidí tréner | Vidí rodič maloletého | Vidí admin |
 |---|---|---|---|---|---|---|
-| `medical_treatment` | ✓ | ✓ | ✓ | – | ✓ (full) | ✓ (audit) |
+| `medical` | ✓ | ✓ | ✓ | – | ✓ (full) | ✓ (audit) |
 | `mental_session` | ✓ | ✓ | – | – | ✓ (full) | ✓ (audit) |
 | `mental_session_private_note` | – | ✓ | – | – | – | ✓ (audit) |
 | `incident_report` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -269,7 +269,7 @@ Každý prístup ku zdravotnému záznamu sa loguje:
 ```
 AuditLog {
   accessedByPersonId,
-  targetType: 'medical_treatment',
+  targetType: 'medical',
   targetId,
   action: 'read' | 'update',
   reason: <text>,  // ak admin organizácie - povinné
@@ -284,7 +284,7 @@ Pri prístupe rodiča maloletého:
 ```
 {
   accessedByPersonId: <parent>,
-  targetType: 'medical_treatment',
+  targetType: 'medical',
   targetId: <treatment of minor>,
   action: 'read',
   // automaticky logovane, žiadny reason povinný

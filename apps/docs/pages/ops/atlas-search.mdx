@@ -238,7 +238,7 @@ async function searchMentoringSessions(query: string, user: User) {
   // 2. ACL filter
   const accessible = [];
   for (const session of candidates) {
-    if (await acl.canRead(user, 'mentoring_session', session._id)) {
+    if (await acl.canRead(user, 'mentoring', session._id)) {
       accessible.push(session);
     }
   }
@@ -307,7 +307,7 @@ Atlas Search beží na separátnych nodoch v Atlas-e. Concurrent queries netrhaj
 
 *"Hľadaj zápasy môjho obľúbeného hráča"*
 
-- Search v `match_participation`
+- Search v `match`
 - Filter: `participantPersonIds: <player>`
 - Filter: tenantId
 
@@ -321,8 +321,8 @@ Pre MVP indexujeme:
 | `mentoringCycle` | finalEvaluation | Career history |
 | `activityComment` | body | Diskusie, mentions |
 | `message` (non-E2E only) | body | Hľadanie v group / broadcast |
-| `match_participation` | description, notes | Match history |
-| `medical_treatment` | (s prísnejším ACL) | Klinický search |
+| `match` | description, notes | Match history |
+| `medical` | (s prísnejším ACL) | Klinický search |
 | `incident_report` | description | Bezpečnostný review |
 | `person` | firstName, lastName | Hľadanie osoby |
 | `organization` | displayName, legalName | Hľadanie organizácie |

@@ -1,0 +1,78 @@
+# ADR-015 · Jednotný zoznam typov aktivít so SportUp.sk
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-11-16
+> **Rozhodli:** Ján Letko, asistent
+> **Súvisí s:** [ADR-006](0006-polymorphic-comments), [ADR-010](0010-sportup-mirror), [Q-028](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+Aktivita je merná jednotka celého ekosystému SportUp: štát a samospráva sa z nej dozvedia, ako často sa ľudia skutočne hýbu a ako sa využívajú športoviská. Zoznam typov aktivít bol pritom nejednotný:
+
+- web `aktivity.html` uvádzal 9 typov, doménový model 8 (chýbalo hodnotenie zo zápasu),
+- chýbali typy pre **šport pre všetkých** (pravidelné a príležitostné cvičenie mimo súťaží) a pre **dobrovoľníctvo**,
+- práca rozhodcu a delegáta bola schovaná v účasti na zápase a v hodnotení,
+- kostra aktivity nemala **miesto**, takže z aktivít nebolo možné vypočítať vyťaženosť športovísk,
+- kódy mali rôzny tvar (`match_participation`, `fan_interaction`, `mentoring_session`).
+
+SportUp.sk (register) potrebuje rovnaký zoznam pre svoj číselník aktivít a pre výstupy pre štát.
+
+## Rozhodnutie
+
+**12 typov aktivít s krátkymi kódmi, zoskupených do 8 skupín. Pri každom type je určené, či je pohybový.**
+
+| `activityType` | Skupina | Pohybová |
+|---|---|---|
+| `training` | Tréning | áno |
+| `match` | Zápas a pretek | áno |
+| `exercise` | Cvičenie a pohyb | áno |
+| `referee` | Rozhodcovia a delegáti | áno |
+| `delegate` | Rozhodcovia a delegáti | nie |
+| `volunteering` | Dobrovoľníctvo | nie |
+| `education` | Vzdelávanie a rozvoj | nie |
+| `mentoring` | Vzdelávanie a rozvoj | nie |
+| `medical` | Starostlivosť o zdravie | nie |
+| `donation` | Podpora a fanúšikovia | nie |
+| `sponsorship` | Podpora a fanúšikovia | nie |
+| `fans` | Podpora a fanúšikovia | nie |
+
+Ďalej:
+
+- **Premenovanie kódov:** `match_participation` → `match`, `medical_treatment` → `medical`, `mentoring_session` → `mentoring`, `education_event` → `education`, `sponsorship_activation` → `sponsorship`, `fan_interaction` → `fans`, `match_evaluation` → `delegate`.
+- **Nové typy:** `exercise`, `volunteering`, `referee`. Rozhodovanie zápasu je odteraz `referee`, nie `match`.
+- **Zápas a pretek sú jeden typ** (`match`); rozdiel určuje šport, nie typ aktivity.
+- **Hodnotenie zo zápasu nepatrí pod súťaž**: je súčasťou práce delegáta (`delegate`).
+- **Kostra aktivity** dostáva `facilityId` (športovisko z katalógu SportUp.sk) a `sportCode`.
+- **Pohybová aktivita** je jediný základ pre ukazovatele pohybu populácie a pravidelnosti. Ostatné typy sa evidujú, ale meradlom pohybu nie sú.
+- Názvy collections v databáze ostávajú bez zmeny (`matchParticipation`, `mentoringSession`, …); mení sa len hodnota `activityType`.
+
+## Dôsledky
+
+### Pozitívne
+
+- Jeden zoznam typov pre activity.sportup.sk aj SportUp.sk; výstupy pre štát sa skladajú zo skupín.
+- Do merania vstupuje šport pre všetkých (`exercise`) a dobrovoľníci, ktorí dnes v evidencii chýbajú.
+- Z `facilityId`, času a trvania vzniká skutočná vyťaženosť športovísk.
+- Krátke kódy sa ľahšie používajú v API, MCP nástrojoch a komentároch.
+
+### Negatívne
+
+- Staré kódy v dokumentácii a v prípadných prototypoch treba prepísať (dokumentácia prepísaná v rámci tohto rozhodnutia).
+- `referee` je pohybová aktivita, delegát nie; pri štatistikách treba toto rozlíšenie dodržiavať.
+
+### Riziká
+
+- Definícia pravidelnosti ešte nie je pevná: otvorená otázka [Q-028](../../../../OPEN_QUESTIONS.md).
+- `facilityId` bez napojeného katalógu športovísk ostane prázdne: integrácia podľa [ADR-010](0010-sportup-mirror).
+
+## Implementačné poznámky
+
+- Tabuľka typov a kostra: [domain-model](/domain-model), sekcia *Typy aktivít*.
+- Pojmy: [glossary](/glossary) (`exercise`, `referee`, `volunteering`, `match`, `delegate`).
+- Číselník aktivít na strane SportUp.sk: `docs/catalogs/activities.md` v repozitári `ltksolutions/sportup.sk`.
+- MCP nástroje (`log_medical_treatment`, `record_mentoring_session`, …) a číselník `mentoring_session_topic` sa nepremenúvajú; sú to názvy operácií, nie typy aktivít.
+
+## Otvorené otázky
+
+- Definícia pravidelnosti (Q-028).
+- Ďalšie navrhnuté typy na rozhodnutie: tábor alebo sústredenie (`camp`), antidopingová kontrola (`doping_control`, citlivá), organizácia podujatia (`organizer`).

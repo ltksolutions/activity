@@ -23,7 +23,7 @@ Predtým než pôjdeme na konkrétne tabuľky, treba zopakovať tri princípy, k
 
 **Princíp "potrebnej blízkosti":** prístup má len osoba s aktívnym funkčným vzťahom k aktivite. *Aktívny* je kľúčové slovo — keď cyklus skončí, mentor stráca W/E na nové komentáre, ale R zostáva (audit). Keď tréner odíde z klubu, stráca prístup k tímovým komentárom v deň ukončenia kontraktu.
 
-## Mentoring session — `activityType: 'mentoring_session'`
+## Mentoring session — `activityType: 'mentoring'`
 
 | Rola | R | W | E | M |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ Predtým než pôjdeme na konkrétne tabuľky, treba zopakovať tri princípy, k
 - *Predseda komisie* je `OrganizationMember` s `role = 'commission_chair'` a aktívnym `endedAt: null` v rovnakej organizácii ako cyklus
 - Po prechode cyklu do `completed/terminated` všetci stratia **W** a **E**, ostáva len **R** (audit)
 
-## Medical treatment — `activityType: 'medical_treatment'`
+## Medical treatment — `activityType: 'medical'`
 
 Citlivé záznamy. Privacy gate striktne obmedzuje prístup.
 
@@ -82,7 +82,7 @@ Citlivé záznamy. Privacy gate striktne obmedzuje prístup.
 - Rodič môže komentovať (napr. *"Adamko bude chýbať, je chorý"*), ale nemôže editovať existujúce komentáre — len mazať vlastné
 - Tréner ako autor má **M** — môže moderovať diskusiu pod svojím plánom
 
-## Match evaluation — `activityType: 'match_evaluation'`
+## Match evaluation — `activityType: 'delegate'`
 
 Hodnotenie zo zápasu (delegát hodnotí rozhodcu).
 
@@ -99,7 +99,7 @@ Hodnotenie zo zápasu (delegát hodnotí rozhodcu).
 
 - *Mentor rozhodcu* — ak má rozhodca aktívny mentoring cyklus, mentor vidí hodnotenia zo zápasov ako kontext
 
-## Education event — `activityType: 'education_event'`
+## Education event — `activityType: 'education'`
 
 Vzdelávacie aktivity (kurzy, semináre, antidopingové školenia).
 
@@ -133,7 +133,7 @@ Finančný dar od podporovateľa.
 - Komentáre tu typicky obsahujú podávejú o použití daru, fotky vďaky, atď.
 - Pre transparentnosť sa donor môže rozhodnúť, či sú komentáre **verejne viditeľné** (širšia ACL ako tu) — toto je flag na úrovni samotného donation záznamu
 
-## Sponsorship activation — `activityType: 'sponsorship_activation'`
+## Sponsorship activation — `activityType: 'sponsorship'`
 
 Sponzorská aktivácia (kampaň, content, eventy).
 
@@ -145,7 +145,7 @@ Sponzorská aktivácia (kampaň, content, eventy).
 | Admin recipient organizácie | ✓ | ✓ | – | – |
 | Iný | – | – | – | – |
 
-## Fan interaction — `activityType: 'fan_interaction'`
+## Fan interaction — `activityType: 'fans'`
 
 Fanúšikovské hlasovanie, predikcia, návšteva podujatia.
 

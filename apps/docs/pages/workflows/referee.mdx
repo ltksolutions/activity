@@ -74,7 +74,7 @@ Nemôže:
 ### V systéme
 
 ```
-Activity: education_event
+Activity: education
   educationType: 'referee_basic_training'
   participantPersonIds: [trainee]
   occurredAt: <začiatok>
@@ -146,12 +146,12 @@ Training {
 }
 ```
 
-#### `match_participation` — Účasť na zápase
+#### `referee` — Rozhodovanie zápasu
 
-Každý rozhodovaný zápas je aktivita:
+Každý rozhodovaný zápas je aktivita typu `referee` (do 11/2026 sa evidoval ako účasť na zápase):
 
 ```
-MatchParticipation {
+Refereeing {
   matchId: <ID zápasu z čisla>,
   role: 'main_referee' | 'assistant' | 'fourth' | 'var' | 'observer',
   occurredAt: <kick-off>,
@@ -162,7 +162,7 @@ MatchParticipation {
 
 Po zápase sa pridáva:
 
-#### `match_evaluation` — Hodnotenie zo zápasu
+#### `delegate` — Práca delegáta vrátane hodnotenia
 
 Delegát hodnotí výkon rozhodcu. Štruktúra závisí od športu (UEFA observer report štruktúra pre futbal):
 
@@ -185,7 +185,7 @@ MatchEvaluation {
 
 ACL: rozhodca vidí svoje hodnotenie, predseda komisie tiež, mentor (ak aktívny cyklus) tiež. Detaily v [../acl/matrix-comments](/acl/matrix-comments).
 
-#### `mentoring_session` — Mentoringové sedenie
+#### `mentoring` — Mentoringové sedenie
 
 Najdôležitejší typ aktivity v rozvoji mladého rozhodcu. Detaily v [../features/mentoring](/features/mentoring).
 
@@ -196,7 +196,7 @@ V kontexte rozhodcu typicky obsahuje:
 - Pozápasový debrief (`post_match_debrief`)
 - Výklad pravidla (`rule_interpretation`)
 
-#### `education_event` — Kontinuálne vzdelávanie
+#### `education` — Kontinuálne vzdelávanie
 
 Pre udržanie a postup licencie. Príklady:
 
@@ -331,12 +331,12 @@ Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
 
 | Aktivita | Vidí rozhodca | Vidí mentor (ak cyklus) | Vidí komisia |
 |---|---|---|---|
-| Vlastné `match_participation` | ✓ | ✓ | ✓ |
-| Vlastné `match_evaluation` | ✓ | ✓ | ✓ |
+| Vlastné `referee` | ✓ | ✓ | ✓ |
+| Hodnotenie od delegáta (`delegate`) | ✓ | ✓ | ✓ |
 | Vlastné `training` | ✓ | – (ak nezdieľa) | – |
-| Vlastné `mentoring_session` | ✓ | ✓ | ✓ |
-| Vlastné `education_event` | ✓ | ✓ | ✓ |
-| Vlastné `medical_treatment` | ✓ | – | – (audit only) |
+| Vlastné `mentoring` | ✓ | ✓ | ✓ |
+| Vlastné `education` | ✓ | ✓ | ✓ |
+| Vlastné `medical` | ✓ | – | – (audit only) |
 
 ## UI obrazovky pre rozhodcu
 

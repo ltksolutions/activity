@@ -85,7 +85,7 @@ Training {
 
 Pre **individuálny tréningový plán** môže tréner vytvoriť `TrainingPlan` (separátna entita, dlhodobý kontainer pre série tréningov).
 
-### `match_participation` — Tréner pri zápase
+### `match` — Tréner pri zápase
 
 Tréner je tiež účastníkom zápasu (rola `coach` alebo `head_coach`):
 
@@ -115,7 +115,7 @@ AthleteEvaluation {
 
 ACL: hodnotenie vidí athlete, rodič maloletého, klubový manažment. Detaily v [../acl/matrix-comments](/acl/matrix-comments).
 
-### `education_event` — Kontinuálne vzdelávanie
+### `education` — Kontinuálne vzdelávanie
 
 ```
 EducationEvent {
@@ -279,10 +279,10 @@ Dashboard:
 | Aktivita | Vlastný plán | Tréning iného trénera | Lekárske hráča | Hodnotenie iného trénera |
 |---|---|---|---|---|
 | `training` | R W E M | R | – | – |
-| `match_participation` | R | R | – | R |
-| `medical_treatment` | – (info pre koordináciu) | – | – | – |
+| `match` | R | R | – | R |
+| `medical` | – (info pre koordináciu) | – | – | – |
 | `athlete_evaluation` | R W E M | – | – | – (vlastné iba) |
-| `education_event` (vlastné) | R W E | – | – | – |
+| `education` (vlastné) | R W E | – | – | – |
 
 Detaily v [../acl/matrix-comments](/acl/matrix-comments).
 

@@ -40,7 +40,7 @@ Systém rozlišuje rôzne stupne angažovanosti, líšia sa funkciami:
 - Email + heslo
 - Môže:
   - Sledovať športovcov, kluby, súťaže (subscribe k broadcastom)
-  - Hlasovať (`fan_interaction` aktivity)
+  - Hlasovať (`fans` aktivity)
   - Komentovať verejné aktivity
   - Pridávať predikcie zápasov
   - Zúčastniť sa kvízov
@@ -77,7 +77,7 @@ Niektoré broadcasty môžu byť verejné (napr. tlačové vyjadrenia klubu). An
 
 ## Hlavné aktivity
 
-### `fan_interaction` — Fanúšikovská interakcia
+### `fans` — Fanúšikovská interakcia
 
 Široká kategória, zahŕňa:
 
@@ -135,11 +135,11 @@ Komentáre sú zase polymorfné. Pod verejnou aktivitou (zápas, hlasovanie, new
 
 | Aktivita | Fanúšik R | Fanúšik W |
 |---|---|---|
-| `fan_interaction` (verejná) | ✓ | ✓ |
-| `match_participation` (verejný zápas) | ✓ | ✓ |
+| `fans` (verejná) | ✓ | ✓ |
+| `match` (verejný zápas) | ✓ | ✓ |
 | `donation` (ak je verejné) | ✓ | – |
-| `mentoring_session` | – | – |
-| `medical_treatment` | – | – |
+| `mentoring` | – | – |
+| `medical` | – | – |
 
 ## Komunikácia
 
@@ -261,7 +261,7 @@ Klub **nevidí** individuálne hlasovania, len agregáty.
 
 Konzistentne s [../acl/matrix-comments](/acl/matrix-comments):
 
-| Aktivita | Vlastná `fan_interaction` | Verejný zápas | Mentoring | Lekárske |
+| Aktivita | Vlastná `fans` | Verejný zápas | Mentoring | Lekárske |
 |---|---|---|---|---|
 | R | ✓ | ✓ | – | – |
 | W | ✓ | ✓ (komentáre) | – | – |
@@ -332,7 +332,7 @@ Užívateľ má kontrolu — môže vypnúť ktorýkoľvek typ notifikácie.
 
 1. **Anti-toxicita** — pri masívnej fanúšikovskej komunite hrozí toxické správanie. Plán: AI-podporovaná moderation, rate limity, automatické varovania pri opakovaných porušeniach.
 
-2. **Lojalitné programy** — body za aktivitu, odmeny, gamifikácia. Out-of-scope pre MVP, ale schéma to vie podporiť cez `fan_interaction` aktivity.
+2. **Lojalitné programy** — body za aktivitu, odmeny, gamifikácia. Out-of-scope pre MVP, ale schéma to vie podporiť cez `fans` aktivity.
 
 3. **Anonymné vs identifikovateľné hlasovanie** — momentálne väčšina hlasovaní anonymná voči verejnosti, klub vidí len agregáty. Pri špecifických prípadoch (oficiálne hlasovanie *Atlét roka*) môže byť potrebná identifikácia. Toto sa rieši per-vote nastavenie.
 

@@ -42,9 +42,13 @@ SPDX-License-Identifier: CC-BY-4.0
       <div class="container-narrow">
         <h2 style="margin-top: 0;">Čo je aktivita</h2>
         <p>
-          Aktivita je <strong>udalosť v čase</strong>. Má dátum a trvanie. Má účastníkov.
+          Aktivita je <strong>udalosť v čase</strong>. Má dátum, trvanie a miesto (športovisko). Má účastníkov.
           Je viditeľná pre tých, ktorí majú práva ju vidieť. Žije navždy ako súčasť
           profesijnej histórie.
+        </p>
+        <p>
+          Z aktivít sa dá merať to, čo počet registrácií nepovie: <strong>ako pravidelne sa ľudia hýbu</strong>
+          a <strong>ako sa skutočne využívajú športoviská</strong>.
         </p>
         <p>
           Každý typ aktivity má svoje špecifické polia (zápas má skóre, tréning má intenzitu,
@@ -58,53 +62,68 @@ SPDX-License-Identifier: CC-BY-4.0
     <section class="section-alt">
       <div class="container">
         <h2 style="margin-top: 0;">Typy aktivít</h2>
-        <p>activity v MVP fáze pozná tieto typy aktivít:</p>
+        <p>activity pozná 12 typov aktivít. Typy označené <strong>pohybová aktivita</strong> sa započítavajú do ukazovateľov pohybu a pravidelnosti; ostatné sa evidujú, ale meradlom pohybu nie sú. Zoznam je zhodný s číselníkom aktivít SportUp.sk.</p>
 
         <div class="cards-grid">
           <div class="card">
             <div class="card-icon" aria-hidden="true">💪</div>
             <h3>Tréning</h3>
-            <p>Kondičná, technická, taktická, regeneračná. RPE, miesto, zúčastnení hráči.</p>
+            <p>Kondičný, technický, taktický, regeneračný. RPE, miesto, zúčastnení. <strong>Pohybová aktivita.</strong> <code>training</code></p>
           </div>
           <div class="card">
             <div class="card-icon" aria-hidden="true">⚽</div>
             <h3>Zápas a pretek</h3>
-            <p>Účasť na zápase v ľubovoľnej role — hráč, rozhodca, tréner, delegát.</p>
+            <p>Účasť hráča, pretekára alebo člena družstva. Či ide o zápas alebo pretek, určuje šport. <strong>Pohybová aktivita.</strong> <code>match</code></p>
           </div>
           <div class="card">
-            <div class="card-icon" aria-hidden="true">🎓</div>
-            <h3>Mentoringové sedenie</h3>
-            <p>Štruktúrované stretnutie mentor ↔ mentee. Detail v <a href="/mentoring.html">samostatnej sekcii</a>.</p>
+            <div class="card-icon" aria-hidden="true">🧘</div>
+            <h3>Cvičenie a pohyb</h3>
+            <p>Pravidelné aj príležitostné cvičenie mimo súťaží: joga, fitness, beh, turistika. Šport pre všetkých. <strong>Pohybová aktivita.</strong> <code>exercise</code></p>
           </div>
           <div class="card">
-            <div class="card-icon" aria-hidden="true">⚕️</div>
-            <h3>Lekárske ošetrenie</h3>
-            <p>Vstupné prehliadky, ošetrenia po zraneniach, fyzio sedenia. Citlivé, prísne ACL.</p>
+            <div class="card-icon" aria-hidden="true">🟨</div>
+            <h3>Rozhodca</h3>
+            <p>Rozhodovanie zápasu alebo preteku: hlavný rozhodca, asistent, štvrtý rozhodca, VAR. <strong>Pohybová aktivita.</strong> <code>referee</code></p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">📋</div>
+            <h3>Delegát</h3>
+            <p>Práca delegáta zápasu vrátane hodnotenia rozhodcu. Štruktúra závisí od športu. <code>delegate</code></p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">🤝</div>
+            <h3>Dobrovoľníctvo</h3>
+            <p>Pomoc pri podujatí, v klube, usporiadateľská služba bez odmeny. <code>volunteering</code></p>
           </div>
           <div class="card">
             <div class="card-icon" aria-hidden="true">📚</div>
             <h3>Vzdelávanie</h3>
-            <p>Kurzy, semináre, antidopingové školenia. Pripočítava kredity k licencii.</p>
+            <p>Kurzy, semináre, antidopingové školenia. Pripočítava kredity k licencii. <code>education</code></p>
           </div>
           <div class="card">
-            <div class="card-icon" aria-hidden="true">⭐</div>
-            <h3>Hodnotenie zo zápasu</h3>
-            <p>Delegát hodnotí výkon rozhodcu. Štruktúra závisí od športu.</p>
+            <div class="card-icon" aria-hidden="true">🎓</div>
+            <h3>Mentoring</h3>
+            <p>Štruktúrované stretnutie mentor ↔ mentee. Detail v <a href="/mentoring.html">samostatnej sekcii</a>. <code>mentoring</code></p>
+          </div>
+          <div class="card">
+            <div class="card-icon" aria-hidden="true">⚕️</div>
+            <h3>Starostlivosť o zdravie</h3>
+            <p>Vstupné prehliadky, ošetrenia po zraneniach, fyzio sedenia. Citlivé, prísne ACL. <code>medical</code></p>
           </div>
           <div class="card">
             <div class="card-icon" aria-hidden="true">💰</div>
-            <h3>Dar a podpora</h3>
-            <p>Sponzorské, mecenášsky dar, 2 % z dane, crowdfunding.</p>
+            <h3>Dar</h3>
+            <p>Mecenášsky dar, 2 % z dane, crowdfunding. <code>donation</code></p>
           </div>
           <div class="card">
             <div class="card-icon" aria-hidden="true">📣</div>
-            <h3>Sponzorská aktivácia</h3>
-            <p>Kampaň, content, prítomnosť na podujatí. Reach a engagement metriky.</p>
+            <h3>Sponzoring</h3>
+            <p>Kampaň, content, prítomnosť na podujatí. Reach a engagement metriky. <code>sponsorship</code></p>
           </div>
           <div class="card">
             <div class="card-icon" aria-hidden="true">👥</div>
-            <h3>Fanúšikovská interakcia</h3>
-            <p>Hlasovanie, predikcia, návšteva podujatia, kvíz.</p>
+            <h3>Fanúšikovia</h3>
+            <p>Hlasovanie, predikcia, návšteva podujatia, kvíz. <code>fans</code></p>
           </div>
         </div>
       </div>

@@ -24,7 +24,7 @@ Preto: **jedna collection `activityComment`** s polymorfnou väzbou cez `(activi
 const ActivityCommentSchema = z.object({
   _id: z.instanceof(ObjectId),
   tenantId: z.instanceof(ObjectId),
-  activityType: z.string(),       // "mentoring_session", "medical_treatment", ...
+  activityType: z.string(),       // "mentoring", "medical", ...
   activityId: z.instanceof(ObjectId),
   authorPersonId: z.instanceof(ObjectId),
   body: z.string().min(1).max(10000),
@@ -84,11 +84,11 @@ class ActivityCommentService {
 
 ```typescript
 const ACTIVITY_REGISTRY: Record<string, ActivityHandler> = {
-  'mentoring_session': {
+  'mentoring': {
     collection: 'mentoringSession',
     aclRules: mentoringSessionAcl,
   },
-  'medical_treatment': {
+  'medical': {
     collection: 'medicalTreatment',
     aclRules: medicalTreatmentAcl,
   },
@@ -103,7 +103,7 @@ Pri pridaní nového typu aktivity sa pridá záznam tu, žiadna ďalšia zmena 
 
 Konečné ACL pravidlá závisia od typu aktivity. Niekoľko ilustračných príkladov:
 
-### Komentáre pod **mentoring_session**
+### Komentáre pod **mentoring**
 
 | Rola | R | W | E | M |
 |---|---|---|---|---|
@@ -113,7 +113,7 @@ Konečné ACL pravidlá závisia od typu aktivity. Niekoľko ilustračných prí
 | Predseda komisie rozhodcov | ✓ | – | – | – |
 | Admin organizácie | ✓ | – | – | ✓ |
 
-### Komentáre pod **medical_treatment**
+### Komentáre pod **medical**
 
 | Rola | R | W | E | M |
 |---|---|---|---|---|

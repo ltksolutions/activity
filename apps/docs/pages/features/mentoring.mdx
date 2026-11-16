@@ -19,7 +19,7 @@ Mentor ────────────────► MentoringCycle ◄─
 
 **MentoringCycle** je dlhodobý kontainer (mesiace až roky). Mentee môže mať viacero cyklov súčasne (napr. hlavný mentor + UEFA mentor) alebo sekvenčne (po jednom cykle nasleduje ďalší s iným mentorom).
 
-**MentoringSession** je riadny typ aktivity (`activityType: 'mentoring_session'`) — jedna formálna interakcia, mentor o nej spraví záznam vo formulári.
+**MentoringSession** je riadny typ aktivity (`activityType: 'mentoring'`) — jedna formálna interakcia, mentor o nej spraví záznam vo formulári.
 
 Vedľa formálnych sedení existuje aj **neformálna komunikácia cez Courier** — mentor a mentee si môžu kedykoľvek napísať. Z Courier rozsahu správ sa dá vytvoriť sedenie cez funkciu *"Vytvoriť sedenie z týchto správ"*.
 
@@ -354,7 +354,7 @@ class MentoringService {
       cycleId: cycle._id,
       recordedByPersonId: cycle.mentorPersonId,
       proposedByPersonId: input.proposedByPersonId ?? currentUserId,
-      activityType: 'mentoring_session',
+      activityType: 'mentoring',
       status: 'recorded',
       recordedAt: new Date(),
     });

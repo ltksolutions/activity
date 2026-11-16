@@ -20,13 +20,13 @@ Detaily v [acl/matrix-comments](acl/matrix-comments) a [acl/matrix-courier](acl/
 
 ### Activity
 
-Generický pojem pre **udalosti zaznamenávané v čase** v športovom kontexte. Polymorfný typ — má kostru (`tenantId`, `occurredAt`, `durationMinutes`, ...) a rozšírenie podľa typu (`training`, `match_participation`, `medical_treatment`, `mentoring_session`, ...).
+Generický pojem pre **udalosti zaznamenávané v čase** v športovom kontexte. Polymorfný typ — má kostru (`tenantId`, `occurredAt`, `durationMinutes`, `facilityId`, ...) a rozšírenie podľa typu (`training`, `match`, `medical`, `mentoring`, ...).
 
 Aktivity žijú v collection `activity_main` v MongoDB Atlas.
 
 ### activityType
 
-Pole na každej aktivite, ktoré určuje **konkrétny typ** (`'training'`, `'mentoring_session'`, `'medical_treatment'`, atď.). Používané pre polymorfné komentáre a pre routing v `ActivityRegistry`.
+Pole na každej aktivite, ktoré určuje **konkrétny typ** (`'training'`, `'mentoring'`, `'medical'`, atď.). Používané pre polymorfné komentáre a pre routing v `ActivityRegistry`.
 
 ### activity-mcp
 
@@ -112,6 +112,10 @@ V MongoDB — **jeden záznam** v collection (ekvivalent riadku). JSON-like štr
 
 Šifrovanie, kde **server nevie dešifrovať** obsah — len odosielateľ a príjemca majú kľúče. V systéme aplikované na `direct` konverzácie v Courier. Detaily v [features/courier](features/courier).
 
+### `exercise`
+
+Typ aktivity — **cvičenie a pohyb** mimo súťaží: pravidelné aj príležitostné cvičenie (joga, fitness, beh, turistika, plávanie). Jadro „športu pre všetkých“. Pohybová aktivita.
+
 ### Externý mentor
 
 `Person` so `kind: 'external_lightweight'` — typicky bývalý reprezentant, UEFA / FIFA mentor. **Nemá** prihlásenie do aplikácie, žije len ako referencia v ACL maticiach. Pridáva sa do `MentoringCycle` cez `add_external_mentor`. Detaily v [features/mentoring](features/mentoring).
@@ -128,7 +132,7 @@ Node.js webový framework — používame ako **HTTP server** pre MCP servery a 
 
 ### FanInteraction
 
-Typ aktivity (`activityType: 'fan_interaction'`) — **fanúšikovská interakcia** ako hlasovanie, predikcia, attendance. Detaily v [workflows/fan](workflows/fan).
+Typ aktivity (`activityType: 'fans'`) — **fanúšikovská interakcia** ako hlasovanie, predikcia, attendance. Detaily v [workflows/fan](workflows/fan).
 
 ### Forward-only
 
@@ -190,13 +194,13 @@ Open-source **search library** od Apache Foundation. Atlas Search ho používa i
 
 ## M
 
-### `match_evaluation`
+### `delegate`
 
-Typ aktivity — **hodnotenie zo zápasu**, typicky delegát hodnotí rozhodcu. Štruktúra závisí od športu.
+Typ aktivity — **práca delegáta zápasu alebo stretnutia**, vrátane hodnotenia rozhodcu. Štruktúra hodnotenia závisí od športu. Nie je pohybová aktivita.
 
-### `match_participation`
+### `match`
 
-Typ aktivity — **účasť na zápase / preteku**. Kto, v akej role, výsledok. Eviduje sa pre hráčov, rozhodcov, trénerov.
+Typ aktivity — **účasť na zápase alebo preteku** ako hráč, pretekár alebo člen družstva. Rozdiel medzi zápasom a pretekom určuje šport, nie typ aktivity. Pohybová aktivita. Rozhodca a delegát majú vlastné typy `referee` a `delegate`.
 
 ### MCP (Model Context Protocol)
 
@@ -206,7 +210,7 @@ Otvorený štandard pre **komunikáciu medzi AI agentmi a backend systémami**. 
 
 Long-term podporovateľ, **fyzická osoba s pravidelnou podporou**. Detaily v [workflows/supporter](workflows/supporter).
 
-### `medical_treatment`
+### `medical`
 
 Typ aktivity — **lekárske ošetrenie / vyšetrenie**. Najprísnejšia ACL. Detaily v [workflows/medical](workflows/medical).
 
@@ -228,7 +232,7 @@ Osoba, ktorá v `MentoringCycle` **vedie a hodnotí** mentee. Vyplňuje formulá
 
 ### MentoringSession
 
-Typ aktivity (`activityType: 'mentoring_session'`) — **jeden vyplnený formulár o mentoringu**. Vypĺňa ho vždy mentor. Detaily v [features/mentoring](features/mentoring).
+Typ aktivity (`activityType: 'mentoring'`) — **jeden vyplnený formulár o mentoringu**. Vypĺňa ho vždy mentor. Detaily v [features/mentoring](features/mentoring).
 
 ### Mirror
 
@@ -285,6 +289,10 @@ Komentár, ktorý sa môže prilepiť **na akúkoľvek aktivitu** cez `(activity
 V Courier — **rodič vystupuje ako zástupca dieťaťa**. `participantType: 'proxy_for_minor'`, `representedMinorId` field. Detaily v [features/parental-proxy](features/parental-proxy).
 
 ## R
+
+### `referee`
+
+Typ aktivity — **rozhodovanie zápasu alebo preteku** (hlavný rozhodca, asistent, štvrtý rozhodca, VAR). Pohybová aktivita.
 
 ### Redis
 
@@ -359,6 +367,10 @@ UI vzor — **chronologický zoznam aktivít** osoby alebo entity. Najnovšie na
 Antidopingová **výnimka** pre lekársky predpísaný liek so zakázanou substanciou. Eviduje sa ako `antidoping_record` aktivita.
 
 ## V
+
+### `volunteering`
+
+Typ aktivity — **dobrovoľnícka činnosť v športe**: pomoc pri podujatí, v klube, usporiadateľská služba bez odmeny. Nie je pohybová aktivita.
 
 ### Vyprchávanie prístupu
 
