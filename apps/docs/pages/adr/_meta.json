@@ -15,6 +15,7 @@
   "0013-brand-v2": "ADR-013 · Brand v2 (Chat Stack, SK Blue/Red)",
   "0014-licensing-eupl-reuse": "ADR-014 · Licenčný model (EUPL-1.2 + CC-BY-4.0 + REUSE)",
   "0015-jednotne-typy-aktivit": "ADR-015 · Jednotné typy aktivít",
+  "0016-dalsie-typy-aktivit": "ADR-016 · Tábor, antidoping, organizátor",
   "template": {
     "title": "ADR template",
     "display": "hidden"

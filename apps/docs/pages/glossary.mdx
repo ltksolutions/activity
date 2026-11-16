@@ -52,6 +52,10 @@ Typ konverzácie v Courier subsystéme, kde **málo publisherov** posiela správ
 
 ## C
 
+### `camp`
+
+Typ aktivity — **tábor alebo sústredenie**: viacdňová aktivita s programom, ubytovaním a dozorom. Pri maloletých platí safeguarding. Pohybová aktivita, skupina Tréning.
+
 ### Caddy
 
 Webový server / reverse proxy s **automatickým TLS** cez Let's Encrypt. Používame ho ako **edge layer** pre on-demand TLS pri custom doménach organizácií. Detaily v [ops/deployment](ops/deployment).
@@ -105,6 +109,10 @@ Funkcia v Courier, ktorá **stíši konverzáciu** (žiadne notifikácie, len ba
 ### Dokument
 
 V MongoDB — **jeden záznam** v collection (ekvivalent riadku). JSON-like štruktúra s ObjectId primárnym kľúčom (`_id`).
+
+### `doping_control`
+
+Typ aktivity — **antidopingová kontrola**. Citlivá: eviduje sa len priebeh a výsledok procesu, nie zdravotné údaje. Nie je pohybová aktivita.
 
 ## E
 
@@ -261,6 +269,10 @@ Zaznamenáva, že **organizácia má vlastnú doménu** (napr. `clenovia.sfz.sk`
 ### OrganizationMember
 
 Vzťahová entita medzi `Person` a `Organization`. **Rola osoby v organizácii** (athlete, coach, referee, parent, fan_club_member, ...). Môže mať `endedAt` pre ukončenie členstva.
+
+### `organizer`
+
+Typ aktivity — **organizácia podujatia** (riaditeľ pretekov, usporiadateľ, technický delegát podujatia), aj za odmenu. Bez odmeny ide o `volunteering`. Nie je pohybová aktivita.
 
 ### Override
 

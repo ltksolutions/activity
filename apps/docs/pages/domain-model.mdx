@@ -384,11 +384,14 @@ Toto sú všetky typy aktivít v systéme. Každý je samostatná collection s v
 | `activityType` | Collection | Skupina | Pohybová | Popis |
 |---|---|---|---|---|
 | `training` | `training` | Tréning | áno | Tréning (kondičný, technický, taktický, regenerácia) |
+| `camp` | `camp` | Tréning | áno | Tábor alebo sústredenie: viacdňová aktivita s programom, ubytovaním a dozorom (safeguarding pri maloletých) |
 | `match` | `matchParticipation` | Zápas a pretek | áno | Účasť na zápase alebo preteku ako hráč, pretekár alebo člen družstva |
 | `exercise` | `exercise` | Cvičenie a pohyb | áno | Pravidelné aj príležitostné cvičenie mimo súťaží (joga, fitness, beh, turistika) |
-| `referee` | `refereeing` | Rozhodcovia a delegáti | áno | Rozhodovanie zápasu alebo preteku (hlavný rozhodca, asistent, štvrtý rozhodca, VAR) |
-| `delegate` | `matchEvaluation` | Rozhodcovia a delegáti | nie | Práca delegáta zápasu vrátane hodnotenia rozhodcu |
-| `volunteering` | `volunteering` | Dobrovoľníctvo | nie | Dobrovoľnícka činnosť: podujatie, klub, usporiadateľská služba bez odmeny |
+| `referee` | `refereeing` | Rozhodovanie a kontrola | áno | Rozhodovanie zápasu alebo preteku (hlavný rozhodca, asistent, štvrtý rozhodca, VAR) |
+| `delegate` | `matchEvaluation` | Rozhodovanie a kontrola | nie | Práca delegáta zápasu vrátane hodnotenia rozhodcu |
+| `doping_control` | `dopingControl` | Rozhodovanie a kontrola | nie | Antidopingová kontrola (citlivé, prísnejšie ACL, len výsledok procesu, nie zdravotné údaje) |
+| `organizer` | `eventOrganization` | Organizácia a dobrovoľníctvo | nie | Organizácia podujatia (riaditeľ pretekov, usporiadateľ, technický delegát podujatia), aj za odmenu |
+| `volunteering` | `volunteering` | Organizácia a dobrovoľníctvo | nie | Dobrovoľnícka činnosť: podujatie, klub, usporiadateľská služba bez odmeny |
 | `education` | `educationEvent` | Vzdelávanie a rozvoj | nie | Vzdelávanie (kurz, seminár, antidopingové školenie) |
 | **`mentoring`** | **`mentoringSession`** | Vzdelávanie a rozvoj | nie | **Mentoringové sedenie — jeden vyplnený formulár** |
 | `medical` | `medicalTreatment` | Starostlivosť o zdravie | nie | Lekárske ošetrenie, fyzioterapia (citlivé, prísnejšie ACL) |
@@ -398,7 +401,7 @@ Toto sú všetky typy aktivít v systéme. Každý je samostatná collection s v
 
 **Skupina** je zoskupenie pre štatistiky a výstupy pre štát; zhoduje sa s číselníkom aktivít SportUp.sk. Merajú sa **všetky** aktivity v športe. **Pohybové** aktivity sú v dátach oddeliteľné, aby sa z nich dali počítať ukazovatele pohybu populácie a pravidelnosti (napr. podiel ľudí s pohybovou aktivitou aspoň raz týždenne).
 
-**Pravidelnosť** sa počíta z pohybových aktivít jednej osoby v čase (napr. počet týždňov s aspoň jednou pohybovou aktivitou). Presná definícia ukazovateľa je otvorená otázka, viď [OPEN_QUESTIONS](https://github.com/ltksolutions/activity/blob/main/OPEN_QUESTIONS.md).
+**Pravidelnosť** sa počíta z pohybových aktivít jednej osoby v čase. Príklad ukazovateľa: aspoň jedna pohybová aktivita týždenne v 4 zo 6 posledných týždňov. Presná definícia je otvorená otázka, viď [OPEN_QUESTIONS](https://github.com/ltksolutions/activity/blob/main/OPEN_QUESTIONS.md).
 
 **`facilityId`** odkazuje na športovisko z katalógu SportUp.sk. Z aktivít s časom, trvaním a miestom vzniká skutočná vyťaženosť športovísk.
 

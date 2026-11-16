@@ -180,7 +180,7 @@ Pravidelnosť je hlavný ukazovateľ pre štát a samosprávu (viď [ADR-015](ap
 - **(B)** Aspoň 150 minút pohybovej aktivity týždenne (odporúčanie WHO) — zdravotne relevantné, ale záznamy z fitness a škôl často nemajú presné trvanie
 - **(C)** Kombinácia: frekvencia (A) ako hlavný ukazovateľ, minúty (B) ako doplnkový
 
-**Prefer:** (C), s (A) ako prvým ukazovateľom v MVP.
+**Prefer:** (C), s (A) ako prvým ukazovateľom v MVP. (A) sa v dokumentácii a na webe uvádza ako príklad.
 
 ---
 

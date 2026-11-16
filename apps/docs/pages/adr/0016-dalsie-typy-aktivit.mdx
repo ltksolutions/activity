@@ -1,0 +1,51 @@
+# ADR-016 · Ďalšie typy aktivít: tábor, antidopingová kontrola, organizácia podujatia
+
+> **Status:** ✅ Accepted
+> **Dátum:** 2026-11-16
+> **Rozhodli:** Ján Letko, asistent
+> **Súvisí s:** [ADR-015](0015-jednotne-typy-aktivit), [Q-028](../../../../OPEN_QUESTIONS.md)
+
+## Kontext
+
+[ADR-015](0015-jednotne-typy-aktivit) zjednotil 12 typov aktivít a nechal otvorené tri ďalšie typy: tábor alebo sústredenie, antidopingovú kontrolu a organizáciu podujatia. Princíp ostáva: **merajú sa všetky aktivity v športe**, pohybové sú v dátach oddeliteľné pre štatistiky pohybu.
+
+## Rozhodnutie
+
+Pridávajú sa tri typy; zoznam má **15 typov v 8 skupinách**. Dve skupiny sa premenúvajú, aby nové typy pokryli.
+
+| `activityType` | Skupina | Pohybová |
+|---|---|---|
+| `camp` | Tréning | áno |
+| `doping_control` | Rozhodovanie a kontrola (doteraz „Rozhodcovia a delegáti“) | nie |
+| `organizer` | Organizácia a dobrovoľníctvo (doteraz „Dobrovoľníctvo“) | nie |
+
+- **`camp`** — tábor alebo sústredenie: viacdňová aktivita s programom, ubytovaním a dozorom. Pri maloletých platí safeguarding. Zodpovedá typu `camp` v doménovom modeli SportUp.sk.
+- **`doping_control`** — antidopingová kontrola. Citlivá: eviduje sa priebeh a výsledok procesu, nie zdravotné údaje; prísnejšie ACL ako pri `medical`.
+- **`organizer`** — organizácia podujatia (riaditeľ pretekov, usporiadateľ, technický delegát podujatia), aj za odmenu. Činnosť bez odmeny je `volunteering`.
+
+Pravidelnosť sa v dokumentácii uvádza ako **príklad** ukazovateľa (aspoň jedna pohybová aktivita týždenne v 4 zo 6 posledných týždňov); definícia ostáva otvorená v Q-028.
+
+## Dôsledky
+
+### Pozitívne
+
+- Tábory a sústredenia sa započítajú do pohybu a do vyťaženosti športovísk a ubytovania.
+- Organizátori podujatí sú viditeľní aj vtedy, keď nejde o dobrovoľníctvo.
+- Antidopingová kontrola má vlastný typ s vlastnými pravidlami prístupu.
+
+### Negatívne
+
+- Viac typov znamená viac schém; spoločná kostra aktivity ostáva rovnaká.
+
+### Riziká
+
+- `doping_control`: hranica medzi výsledkom procesu a zdravotnými údajmi musí byť v schéme presná (spolupráca s antidopingovou agentúrou pred implementáciou).
+
+## Implementačné poznámky
+
+- Tabuľka typov: [domain-model](/domain-model), sekcia *Typy aktivít*; pojmy v [glossary](/glossary).
+- Číselník SportUp.sk: `docs/catalogs/activities.md` v repozitári `ltksolutions/sportup.sk`.
+
+## Otvorené otázky
+
+- Definícia pravidelnosti (Q-028).
